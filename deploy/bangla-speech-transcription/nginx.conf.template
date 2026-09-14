@@ -1,0 +1,41 @@
+map $http_x_api_key $api_key_valid {
+    default        0;
+    "${SITE_API_KEY}"  1;
+}
+
+server {
+    listen 3800;
+
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        if ($api_key_valid = 0) {
+            return 401 '{"error":"Invalid or missing API key"}';
+        }
+        add_header Content-Type application/json;
+    }
+
+    location /api/whisper/v1/ai-process {
+        if ($api_key_valid = 0) {
+            return 401 '{"error":"Invalid or missing API key"}';
+        }
+        proxy_pass http://127.0.0.1:3433/v1/ai-process;
+        proxy_read_timeout 130s;
+        proxy_send_timeout 130s;
+        client_max_body_size 256k;
+    }
+
+    location /api/whisper/ {
+        if ($api_key_valid = 0) {
+            return 401 '{"error":"Invalid or missing API key"}';
+        }
+        proxy_pass http://127.0.0.1:3433/;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        client_max_body_size 500m;
+    }
+
+}

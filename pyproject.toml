@@ -24,6 +24,8 @@ dependencies = []
 gemini = ["google-genai>=1.0.0"]
 # Local Bengali Whisper SAM15K ASR backend. Torch is installed from the CUDA
 # wheel index in Docker for production GPU support.
+diarization = ["pyannote.audio>=3.3" ]
+
 sam15000 = [
     "transformers>=4.46.0",
     "accelerate>=0.34.0",

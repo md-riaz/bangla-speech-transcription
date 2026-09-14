@@ -37,3 +37,6 @@ transcription.log
 *.swp
 .DS_Store
 Thumbs.db
+
+# --- Bangla Speech Transcription deployment runtime data ---
+deploy/bangla-speech-transcription/.env

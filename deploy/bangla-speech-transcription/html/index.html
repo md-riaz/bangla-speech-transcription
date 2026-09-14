@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>Bangla Speech Transcription</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap">
+<style>
+:root {
+  --bg:        #f5f7f2;
+  --surface:   #ffffff;
+  --surface2:  #eef2ea;
+  --border:    #d4dece;
+  --text:      #1a2e17;
+  --text-sub:  #4a6345;
+  --accent:    #006a4e;
+  --accent-h:  #005040;
+  --accent-lt: #e0f0ea;
+  --red:       #c0392b;
+  --shadow:    0 2px 16px rgba(0,106,78,.10);
+  --shadow-lg: 0 8px 40px rgba(0,106,78,.15);
+  --radius:    14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #0f1a0e;
+    --surface:   #162014;
+    --surface2:  #1d2b1a;
+    --border:    #2a3d27;
+    --text:      #e2edd8;
+    --text-sub:  #8aad80;
+    --accent:    #2eb87a;
+    --accent-h:  #3dd18a;
+    --accent-lt: #0d2a1f;
+    --red:       #e05a4a;
+    --shadow:    0 2px 16px rgba(0,0,0,.40);
+    --shadow-lg: 0 8px 40px rgba(0,0,0,.50);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:        #0f1a0e;
+  --surface:   #162014;
+  --surface2:  #1d2b1a;
+  --border:    #2a3d27;
+  --text:      #e2edd8;
+  --text-sub:  #8aad80;
+  --accent:    #2eb87a;
+  --accent-h:  #3dd18a;
+  --accent-lt: #0d2a1f;
+  --red:       #e05a4a;
+  --shadow:    0 2px 16px rgba(0,0,0,.40);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,.50);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', 'Hind Siliguri', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-icon {
+  width: 38px;
+  height: 38px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-icon svg { width: 22px; height: 22px; fill: white; }
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.logo-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.3px;
+}
+.logo-ver {
+  font-size: .65rem;
+  font-weight: 500;
+  color: var(--text-sub);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.status-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .78rem;
+  color: var(--text-sub);
+  font-weight: 500;
+}
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #aaa;
+  transition: background .3s;
+}
+.dot.ok { background: #2eb87a; box-shadow: 0 0 0 2px rgba(46,184,122,.25); }
+.dot.err { background: var(--red); }
+
+/* ── Main ── */
+main {
+  flex: 1;
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+}
+
+.page-title {
+  text-align: center;
+  margin-bottom: 36px;
+}
+.page-title h1 {
+  font-family: 'Hind Siliguri', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text);
+  text-wrap: balance;
+}
+.page-title p {
+  margin-top: 8px;
+  color: var(--text-sub);
+  font-size: .92rem;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+/* ── Model switcher ── */
+.model-switcher {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.model-btn {
+  padding: 8px 20px;
+  border-radius: 22px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-sub);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .2s;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.model-btn:hover { border-color: var(--accent); color: var(--accent); }
+.model-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.model-badge {
+  font-size: .7rem;
+  background: rgba(255,255,255,.2);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+.model-btn:not(.active) .model-badge {
+  background: var(--surface2);
+  color: var(--text-sub);
+}
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+.drop-zone:hover,
+.drop-zone.drag { border-color: var(--accent); background: var(--accent-lt); }
+.drop-zone.has-file { border-style: solid; border-color: var(--accent); background: var(--accent-lt); }
+.drop-icon { font-size: 3rem; margin-bottom: 12px; display: block; }
+.drop-zone h3 { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.drop-zone p { font-size: .82rem; color: var(--text-sub); }
+.drop-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.file-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 6px 14px;
+  background: var(--accent);
+  color: white;
+  border-radius: 20px;
+  font-size: .8rem;
+  font-weight: 600;
+}
+.file-badge button {
+  background: none; border: none; color: white; cursor: pointer;
+  font-size: 1rem; line-height: 1; padding: 0; margin-left: 2px;
+}
+.audio-preview { display:none; margin-top:12px; width:100%; max-width:420px; accent-color:var(--accent); }
+.audio-preview.show { display:block; }
+
+/* ── Options row ── */
+.options-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.opt-group {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.opt-group label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-sub);
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.opt-group input,
+.opt-group select {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: .88rem;
+  font-family: inherit;
+  transition: border-color .2s;
+  outline: none;
+}
+.opt-group input:focus,
+.opt-group select:focus { border-color: var(--accent); }
+
+/* ── Mic row ── */
+.mic-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mic-row > span {
+  font-size: .82rem;
+  color: var(--text-sub);
+  flex: 1;
+  min-width: 120px;
+}
+.mic-row .btn-mic > span:first-child { flex: 0; min-width: auto; line-height: 1; }
+.btn-mic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 286px;
+  justify-content: center;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+}
+.btn-mic:hover { border-color: var(--accent); color: var(--accent); }
+.btn-mic.recording { border-color: var(--red); color: var(--red); background: #fff0ee; animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.6 } }
+.rec-time { font-variant-numeric: tabular-nums; }
+
+/* ── Submit ── */
+.btn-submit {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .2s, transform .1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-submit:hover:not(:disabled) { background: var(--accent-h); transform: translateY(-1px); }
+.btn-submit:active:not(:disabled) { transform: translateY(0); }
+.btn-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+/* ── Progress ── */
+.progress-wrap {
+  display: none;
+  margin-top: 20px;
+}
+.progress-wrap.show { display: block; }
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: .8rem;
+  color: var(--text-sub);
+  margin-bottom: 8px;
+}
+.progress-bar-bg {
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  width: 0%;
+  transition: width .4s;
+}
+.progress-bar.indeterminate {
+  width: 30%;
+  animation: slide 1.4s ease-in-out infinite;
+}
+@keyframes slide {
+  0%   { margin-left: -30%; }
+  100% { margin-left: 100%; }
+}
+
+/* ── History ── */
+.history-card { display: none; padding: 0; overflow: hidden; }
+.history-card.show { display: block; }
+.history-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid var(--border); }
+.history-header h2 { font-size:1rem; }
+.history-list { max-height: 360px; overflow:auto; }
+.history-empty { padding:24px 18px; color:var(--text-sub); font-size:.88rem; }
+.history-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:13px 18px; border-bottom:1px solid var(--border); }
+.history-item:last-child { border-bottom:0; }
+.history-title { font-size:.88rem; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.history-meta { margin-top:3px; font-size:.75rem; color:var(--text-sub); }
+.history-status { display:inline-flex; margin-left:6px; padding:2px 6px; border-radius:999px; font-size:.68rem; font-weight:700; background:var(--surface2); color:var(--text-sub); }
+.history-status.completed { color:var(--accent); background:var(--accent-lt); }
+@media (max-width:540px) { .history-item { padding:12px; } }
+
+/* ── Result ── */
+.result-card { display: none; }
+.result-card.show { display: block; }
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.result-header h2 { font-size: 1.05rem; font-weight: 700; }
+.result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-action {
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-action:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+
+.transcript-box {
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 20px;
+  font-family: 'Hind Siliguri', 'Inter', sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.85;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 80px;
+  direction: ltr;
+}
+
+.meta-row {
+  display: flex;
+  gap: 20px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.meta-label { font-size: .72rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: .4px; font-weight: 600; }
+.meta-val { font-size: .9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── Error ── */
+.error-box {
+  display: none;
+  padding: 14px 18px;
+  background: #fff5f5;
+  border: 1px solid #fcc;
+  border-radius: 10px;
+  color: var(--red);
+  font-size: .88rem;
+  margin-top: 14px;
+}
+.error-box.show { display: block; }
+
+/* ── Speaker transcript ── */
+.speaker-block { margin-bottom: 14px; }
+.speaker-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.speaker-text {
+  font-family: 'Hind Siliguri', sans-serif;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+/* ── AI processing ── */
+.ai-panel { margin-top: 24px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--accent-lt) 42%, var(--surface)); }
+.ai-panel h3 { font-size: .96rem; margin-bottom: 4px; }
+.ai-panel p { color: var(--text-sub); font-size: .8rem; line-height: 1.45; margin-bottom: 14px; }
+.ai-panel textarea, .ai-panel input { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 10px 12px; font: inherit; outline: none; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.ai-panel textarea:focus, .ai-panel input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.ai-panel textarea { min-height: 116px; resize: vertical; }
+.ai-config-grid { display: grid; grid-template-columns: 1.55fr .85fr; gap: 10px; margin: 12px 0; }
+.field-label { display:block; margin: 0 0 6px; color: var(--text-sub); font-size: .72rem; font-weight: 700; letter-spacing: .35px; text-transform: uppercase; }
+.ai-key-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.ai-key-row .btn-action { min-height: 38px; padding: 7px 11px; align-self: end; justify-content: center; white-space: nowrap; }
+.ai-key-row input { padding: 8px 10px; }
+.ai-output { display: none; white-space: pre-wrap; margin-top: 16px; padding: 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); line-height: 1.65; }
+.ai-output.show { display: block; }
+@media (max-width: 540px) { .ai-config-grid, .ai-key-row { grid-template-columns: 1fr; } .ai-key-row .btn-action { justify-content:center; } }
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+  gap: 4px;
+}
+.tab-btn {
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  background: none;
+  color: var(--text-sub);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color .15s, border-color .15s;
+  margin-bottom: -1px;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── Footer ── */
+footer {
+  text-align: center;
+  padding: 20px;
+  font-size: .75rem;
+  color: var(--text-sub);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 540px) {
+  main { padding: 20px 12px 40px; }
+  .page-title h1 { font-size: 1.4rem; }
+  .card { padding: 18px; }
+  .drop-zone { padding: 32px 16px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.5 2 11c0 2.4 1.1 4.6 2.9 6.2L4 21l4.2-1.4C9.4 20.2 10.7 20.5 12 20.5c5.5 0 10-3.5 10-8s-4.5-9.5-10-9.5zM8 13H7v-2h1v2zm5 0H9V9h4v4zm3 0h-1v-2h1v2z"/></svg>
+    </div>
+    <div class="logo-text">
+      <span class="logo-name">Bangla Speech Transcription</span>
+      <span class="logo-ver">BitwiseMind SAM15K · Bengali Whisper</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="btn-action" type="button" onclick="toggleHistory()">🕘 History</button>
+    <div class="status-dot">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusTxt">checking...</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">
+    <h1>বাংলা বক্তৃতা থেকে লিখিত রূপান্তর</h1>
+    <p>Upload audio or record live — get accurate Bangla transcription instantly</p>
+  </div>
+
+  <div class="card">
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <span class="drop-icon">🎵</span>
+      <h3>Drop audio here or click to browse</h3>
+      <p>Supports WAV, MP3, M4A, FLAC, OGG, WEBM &nbsp;·&nbsp; Up to 500 MB</p>
+      <input type="file" id="audioFile" accept=".wav,.mp3,.m4a,.flac,.ogg,.webm,audio/*">
+      <div id="fileBadge" class="file-badge" style="display:none">
+        <span>🎧</span>
+        <span id="fileName">—</span>
+        <button onclick="clearFile()" title="Remove">✕</button>
+      </div>
+      <audio id="audioPreview" class="audio-preview" controls preload="metadata"></audio>
+    </div>
+
+    <!-- Mic recording -->
+    <div class="mic-row">
+      <span id="micStatus">Or record directly from your microphone</span>
+      <button class="btn-mic" id="micBtn" onclick="toggleMic()">
+        <span>🎙️</span> <span id="micLabel">Start Recording</span>
+        <span class="rec-time" id="recTime" style="display:none"></span>
+      </button>
+    </div>
+
+    <!-- Options -->
+    <div class="options-row">
+      <div class="opt-group">
+        <label>Language</label>
+        <select id="langSelect">
+          <option value="bn" selected>Bengali (বাংলা)</option>
+          <option value="auto">Auto-detect</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Speaker hints (optional)</label>
+        <input type="text" id="speakerHintsInput" placeholder="e.g. Rahim, Karim, Nabila">
+      </div>
+      <div class="opt-group">
+        <label>API Key 🔑</label>
+        <input type="password" id="apiKeyInput" placeholder="Enter API key" oninput="saveApiKey(this.value)">
+      </div>
+    </div>
+
+    <section class="ai-panel" aria-labelledby="aiTitle">
+      <h3 id="aiTitle">✨ Optional AI processing</h3>
+      <p>Set this once before transcription. Settings remain in this browser; you can review detected speakers before processing the completed transcript.</p>
+      <label class="field-label" for="aiPrompt">Instruction</label>
+      <textarea id="aiPrompt" maxlength="12000" placeholder="Example: Summarize this audio in Bangla with action items."></textarea>
+      <button class="btn-action" type="button" onclick="useMeetingNotesPrompt()">Use meeting-notes template</button>
+      <div class="ai-config-grid">
+        <div><label class="field-label" for="openaiUrl">Provider URL</label><input type="url" id="openaiUrl" value="https://api.openai.com/v1" autocomplete="url" placeholder="https://api.openai.com/v1" oninput="saveAIConfig()"></div>
+        <div><label class="field-label" for="openaiModel">Model</label><input type="text" id="openaiModel" value="gpt-4o-mini" maxlength="128" autocomplete="off" placeholder="gpt-4o-mini" oninput="saveAIConfig()"></div>
+      </div>
+      <div class="ai-key-row">
+        <div><label class="field-label" for="openaiKey">Provider API key</label><input type="password" id="openaiKey" autocomplete="off" placeholder="Stored in this browser only" oninput="saveAIConfig()"></div>
+        <button class="btn-action" id="aiProcessBtn" onclick="processWithAI()" disabled title="Available after transcription completes">✨ Process result</button>
+      </div>
+    </section>
+
+
+    <!-- Submit -->
+    <button class="btn-submit" id="submitBtn" onclick="startTranscription()" disabled>
+      <span>🚀</span> Transcribe
+    </button>
+
+    <!-- Progress -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressMsg">Uploading...</span>
+        <span id="progressPct"></span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar indeterminate" id="progressBar"></div>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <section class="card history-card" id="historyCard" aria-labelledby="historyTitle">
+    <div class="history-header"><h2 id="historyTitle">Transcription history</h2><button class="btn-action" type="button" onclick="loadHistory()">↻ Refresh</button></div>
+    <div class="history-list" id="historyList" aria-live="polite"></div>
+  </section>
+
+  <!-- Result -->
+  <div class="card result-card" id="resultCard">
+    <div class="result-header">
+      <h2>✨ Transcription Result</h2>
+      <div class="result-actions">
+        <button class="btn-action" onclick="copyText()">📋 Copy</button>
+        <button class="btn-action" onclick="downloadTxt()">⬇️ TXT</button>
+        <button class="btn-action" id="srtBtn" onclick="downloadSrt()">⬇️ SRT</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('full', this)">Full Text</button>
+      <button class="tab-btn" onclick="switchTab('speakers', this)">By Speaker</button>
+    </div>
+
+    <div class="tab-pane active" id="tab-full">
+      <div class="transcript-box" id="transcriptText"></div>
+    </div>
+    <div class="tab-pane" id="tab-speakers">
+      <div id="speakerMapping" class="ai-panel" style="display:none"></div>
+      <div id="speakersBox"></div>
+    </div>
+    <div class="ai-output" id="aiOutput" aria-live="polite"></div>
+
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-label">Language</span>
+        <span class="meta-val" id="metaLang">—</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Duration</span>
+        <span class="meta-val" id="metaDur">—</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Processing</span>
+        <span class="meta-val" id="metaProc">—</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Job ID</span>
+        <span class="meta-val" id="metaJob" style="font-size:.72rem">—</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <strong>ASR:</strong> BitwiseMind SAM15K Bengali Whisper · <strong>Speaker diarization:</strong> Pyannote Community-1 + BitwiseMind Bengali segmentation · &copy; 2026 Sineris
+</footer>
+
+<script>
+const MODELS = {
+  'sra-vaani': {
+    api: '/api/whisper',
+    label: 'BitwiseMind SAM15K · Bengali Whisper',
+    engine: 'whisper-bn'
+  }};
+let currentModel = MODELS['sra-vaani'];
+let API = currentModel.api;
+
+function useMeetingNotesPrompt() {
+  document.getElementById('aiPrompt').value = `নিচের বাংলা meeting transcript থেকে meeting notes তৈরি করো।
+
+সিদ্ধান্ত:
+- ...
+
+Action items:
+1. দায়িত্বপ্রাপ্ত speaker/person → কাজ → deadline
+
+Pending:
+- ...
+
+নাম, সংখ্যা, তারিখ, deadline এবং দায়িত্ব transcript-এ না থাকলে অনুমান করবে না। Speaker labels অপরিচিত হলে একই label রেখে দাও।`;
+  saveAIConfig();
+}
+
+function getKey() { return document.getElementById('apiKeyInput').value.trim(); }
+function authHeaders() { const k = getKey(); return k ? { 'X-API-Key': k } : {}; }
+function saveApiKey(v) { try { localStorage.setItem('sra_api_key', v); } catch {} }
+function saveAIConfig() {
+  try {
+    localStorage.setItem('sra_ai_config', JSON.stringify({
+      baseUrl: document.getElementById('openaiUrl').value.trim(),
+      model: document.getElementById('openaiModel').value.trim(),
+      apiKey: document.getElementById('openaiKey').value,
+    }));
+  } catch {}
+}
+function loadAIConfig() {
+  try {
+    const config = JSON.parse(localStorage.getItem('sra_ai_config') || '{}');
+    if (config.baseUrl) document.getElementById('openaiUrl').value = config.baseUrl;
+    if (config.model) document.getElementById('openaiModel').value = config.model;
+    if (config.apiKey) document.getElementById('openaiKey').value = config.apiKey;
+  } catch {}
+}
+
+let audioBlob = null;
+let audioFileName = 'recorded.webm';
+let audioPreviewUrl = null;
+let aiRefreshTimer = null;
+let mediaRecorder = null;
+let recChunks = [];
+let recInterval = null;
+let recStart = 0;
+let currentJobId = null;
+let resultData = null;
+let speakerNames = {};
+
+/* ── Health check ── */
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/health', { headers: authHeaders() });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      document.getElementById('statusDot').className = 'dot ok';
+      document.getElementById('statusTxt').textContent = 'Online · ' + currentModel.label;
+    } else throw new Error();
+  } catch {
+    document.getElementById('statusDot').className = 'dot err';
+    document.getElementById('statusTxt').textContent = 'Offline';
+  }
+}
+
+function switchModel(key) {
+  currentModel = MODELS[key];
+  API = currentModel.api;
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.model-btn[data-key="' + key + '"]').classList.add('active');
+  clearResult();
+  checkHealth();
+}
+
+try {
+  const saved = localStorage.getItem('sra_api_key');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+} catch {}
+loadAIConfig();
+
+checkHealth();
+setInterval(checkHealth, 30000);
+
+/* ── File select ── */
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('audioFile');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+function setFile(f) {
+  audioBlob = f;
+  audioFileName = f.name;
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('fileBadge').style.display = 'inline-flex';
+  setAudioPreview(f);
+  dropZone.classList.add('has-file');
+  document.getElementById('submitBtn').disabled = false;
+  stopMic();
+}
+
+function clearFile() {
+  audioBlob = null;
+  audioFileName = 'recorded.webm';
+  document.getElementById('fileName').textContent = '—';
+  document.getElementById('fileBadge').style.display = 'none';
+  clearAudioPreview();
+  dropZone.classList.remove('has-file');
+  document.getElementById('submitBtn').disabled = true;
+  fileInput.value = '';
+}
+
+function setAudioPreview(source) {
+  clearAudioPreview();
+  audioPreviewUrl = URL.createObjectURL(source);
+  const player = document.getElementById('audioPreview');
+  player.src = audioPreviewUrl;
+  player.classList.add('show');
+}
+function clearAudioPreview() {
+  const player = document.getElementById('audioPreview');
+  player.pause(); player.removeAttribute('src'); player.load(); player.classList.remove('show');
+  if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+  audioPreviewUrl = null;
+}
+
+/* ── Mic recording ── */
+async function toggleMic() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    stopMic();
+  } else {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      recChunks = [];
+      recStart = Date.now();
+      mediaRecorder.ondataavailable = e => recChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(recChunks, { type: 'audio/webm' });
+        audioFileName = 'recording_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.webm';
+        document.getElementById('fileName').textContent = audioFileName;
+        document.getElementById('fileBadge').style.display = 'inline-flex';
+        setAudioPreview(audioBlob);
+        dropZone.classList.add('has-file');
+        document.getElementById('submitBtn').disabled = false;
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorder.start();
+      recInterval = setInterval(updateRecTime, 500);
+      const btn = document.getElementById('micBtn');
+      btn.className = 'btn-mic recording';
+      document.getElementById('micLabel').textContent = 'Stop Recording';
+      document.getElementById('recTime').style.display = 'inline';
+      document.getElementById('micStatus').textContent = 'Recording...';
+    } catch {
+      showError('Microphone access denied. Please allow microphone in browser settings.');
+    }
+  }
+}
+
+function stopMic() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  clearInterval(recInterval);
+  const btn = document.getElementById('micBtn');
+  btn.className = 'btn-mic';
+  document.getElementById('micLabel').textContent = 'Start Recording';
+  document.getElementById('recTime').style.display = 'none';
+  document.getElementById('micStatus').textContent = 'Or record directly from your microphone';
+}
+
+function updateRecTime() {
+  const s = Math.floor((Date.now() - recStart) / 1000);
+  const m = Math.floor(s / 60);
+  document.getElementById('recTime').textContent = `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/* ── Transcription ── */
+async function startTranscription() {
+  if (!audioBlob) return;
+  clearResult();
+  showProgress('Uploading audio...');
+  hideError();
+
+  const fd = new FormData();
+  fd.append('file', audioBlob, audioFileName);
+  fd.append('language', document.getElementById('langSelect').value === 'auto' ? 'auto' : 'bn');
+  fd.append('labels', document.getElementById('speakerHintsInput').value.trim() || 'Speaker 1');
+  fd.append('diarize', 'true');
+
+  try {
+    const r = await fetch(API + '/v1/transcriptions', { method: 'POST', body: fd, headers: authHeaders() });
+    if (!r.ok) {
+      if (r.status === 401) throw new Error('Invalid API key — please check the API Key field.');
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || 'Upload failed (' + r.status + ')');
+    }
+    const job = await r.json();
+    currentJobId = job.job_id;
+    saveHistoryId(job.job_id);
+    document.getElementById('metaJob').textContent = job.job_id;
+    showProgress('Processing...', true);
+    pollJob(job.job_id);
+  } catch (err) {
+    hideProgress();
+    showError(err.message);
+  }
+}
+
+async function pollJob(jobId) {
+  const t0 = Date.now();
+  const poll = async () => {
+    try {
+      const r = await fetch(API + '/v1/transcriptions/' + jobId, { headers: authHeaders() });
+      if (!r.ok) throw new Error('Poll failed: ' + r.status);
+      const d = await r.json();
+      if (d.status === 'completed') {
+        hideProgress();
+        await fetchResult(jobId, d);
+      } else if (d.status === 'failed') {
+        hideProgress();
+        showError('Transcription failed. Please try again.');
+      } else {
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
+        document.getElementById('progressMsg').textContent = 'Processing... ' + elapsed + 's';
+        setTimeout(poll, 2000);
+      }
+    } catch (err) {
+      hideProgress();
+      showError(err.message);
+    }
+  };
+  poll();
+}
+
+const HISTORY_KEY = 'bangla_transcription_history_ids';
+function historyIds() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]').filter(id => typeof id === 'string'); } catch { return []; }
+}
+function saveHistoryId(jobId) {
+  try {
+    const ids = historyIds().filter(id => id !== jobId);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify([jobId, ...ids].slice(0, 50)));
+  } catch {}
+}
+async function toggleHistory() {
+  const panel = document.getElementById('historyCard');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) await loadHistory();
+}
+async function loadHistory() {
+  const list = document.getElementById('historyList');
+  list.replaceChildren();
+  const ids = historyIds();
+  if (!ids.length) { list.innerHTML = '<div class="history-empty">No transcriptions saved in this browser yet.</div>'; return; }
+  const jobs = await Promise.all(ids.map(async id => {
+    try {
+      const response = await fetch(API + '/v1/transcriptions/' + id, { headers: authHeaders() });
+      return response.ok ? await response.json() : null;
+    } catch { return null; }
+  }));
+  const available = jobs.filter(Boolean);
+  if (!available.length) { list.innerHTML = '<div class="history-empty">Saved items are no longer available on the server.</div>'; return; }
+  for (const job of available) {
+    const item = document.createElement('div'); item.className = 'history-item';
+    const info = document.createElement('div');
+    const transcript = job.transcript || job.result || {};
+    const title = document.createElement('div'); title.className = 'history-title'; title.textContent = transcript.filename || job.id;
+    const meta = document.createElement('div'); meta.className = 'history-meta';
+    const badge = document.createElement('span'); badge.className = 'history-status ' + (job.status || ''); badge.textContent = job.status || 'unknown';
+    meta.textContent = [job.created_at, transcript.duration_seconds ? `${Math.round(transcript.duration_seconds)}s` : null].filter(Boolean).join(' · ');
+    meta.append(badge); info.append(title, meta); item.append(info);
+    if (job.status === 'completed') { const open = document.createElement('button'); open.className='btn-action'; open.type='button'; open.textContent='Open'; open.addEventListener('click', () => openHistoryResult(job.id)); item.append(open); }
+    list.append(item);
+  }
+}
+async function openHistoryResult(jobId) {
+  currentJobId = jobId;
+  saveHistoryId(jobId);
+  await fetchResult(jobId);
+  document.getElementById('historyCard').classList.remove('show');
+}
+
+async function fetchResult(jobId, jobData) {
+  try {
+    const rJson = await fetch(API + '/v1/transcriptions/' + jobId + '/result', { headers: authHeaders() });
+    resultData = await rJson.json().catch(() => null);
+    const turns = resultData?.turns || resultData?.segments || [];
+    const fullText = resultData?.full_text || turns.map(turn => `[${turn.speaker || 'Speaker'}]: ${turn.text || ''}`).join('\n');
+    showResult(fullText, resultData);
+  } catch (err) {
+    showError('Failed to fetch result: ' + err.message);
+  }
+}
+
+function hasAIConfig() {
+  return ['aiPrompt', 'openaiUrl', 'openaiModel', 'openaiKey'].every(id => document.getElementById(id).value.trim());
+}
+function meetingTurns() { return resultData?.turns || resultData?.segments || []; }
+function displaySpeaker(speaker) { return speakerNames[speaker]?.trim() || speaker || 'Speaker'; }
+function mappedTranscript() {
+  const turns = meetingTurns();
+  return turns.length ? turns.map(t => `[${displaySpeaker(t.speaker)}]: ${t.text || ''}`).join('\n') : document.getElementById('transcriptText').textContent.trim();
+}
+function refreshMappedResult() {
+  document.getElementById('transcriptText').textContent = mappedTranscript();
+  renderSpeakers();
+  if (hasAIConfig() && document.getElementById('aiOutput').classList.contains('show')) {
+    clearTimeout(aiRefreshTimer);
+    aiRefreshTimer = setTimeout(processWithAI, 500);
+  }
+}
+function renderSpeakerMapping() {
+  const mapping = document.getElementById('speakerMapping');
+  const turns = meetingTurns();
+  const speakers = [...new Set(turns.map(t => t.speaker).filter(Boolean))];
+  mapping.replaceChildren();
+  mapping.style.display = speakers.length ? 'block' : 'none';
+  if (!speakers.length) return;
+  const title = document.createElement('h3'); title.textContent = 'Name detected speakers'; mapping.append(title);
+  const note = document.createElement('p'); note.textContent = 'Names apply only to this transcript.'; mapping.append(note);
+  for (const speaker of speakers) {
+    const input = document.createElement('input'); input.type = 'text'; input.placeholder = speaker; input.value = speakerNames[speaker] || '';
+    input.setAttribute('aria-label', `Name for ${speaker}`);
+    input.addEventListener('input', () => { speakerNames[speaker] = input.value; refreshMappedResult(); });
+    mapping.append(input);
+  }
+}
+function renderSpeakers() {
+  const box = document.getElementById('speakersBox'); box.replaceChildren();
+  for (const turn of meetingTurns()) {
+    const block = document.createElement('div'); block.className = 'speaker-block';
+    const tag = document.createElement('div'); tag.className = 'speaker-tag'; tag.textContent = `🎙️ ${displaySpeaker(turn.speaker)}`;
+    const body = document.createElement('div'); body.className = 'speaker-text'; body.textContent = turn.text || '';
+    block.append(tag, body); box.append(block);
+  }
+}
+function showResult(text, data) {
+  document.getElementById('transcriptText').textContent = text;
+  resultData = data;
+  document.getElementById('aiProcessBtn').disabled = false;
+  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('resultCard').classList.add('show');
+  document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const turns = meetingTurns();
+  const tab = document.querySelector('[onclick="switchTab(\'speakers\', this)"]');
+  tab.style.display = turns.length ? '' : 'none';
+  renderSpeakerMapping(); renderSpeakers();
+  if (hasAIConfig()) processWithAI();
+  if (data) { document.getElementById('metaLang').textContent = data.language || data.language_detected || 'Bengali'; document.getElementById('metaDur').textContent = data.duration ? data.duration.toFixed(1) + 's' : (data.duration_seconds ? data.duration_seconds.toFixed(1) + 's' : '—'); document.getElementById('metaProc').textContent = data.processing_time ? data.processing_time.toFixed(1) + 's' : '—'; }
+}
+
+function clearResult() {
+  document.getElementById('resultCard').classList.remove('show');
+  document.getElementById('resultCard').style.display = 'none';
+  resultData = null;
+  speakerNames = {};
+  document.getElementById('aiProcessBtn').disabled = true;
+}
+
+async function processWithAI() {
+  const prompt = document.getElementById('aiPrompt').value.trim();
+  const openaiKey = document.getElementById('openaiKey').value.trim();
+  const baseUrl = document.getElementById('openaiUrl').value.trim();
+  const model = document.getElementById('openaiModel').value.trim();
+  const transcript = mappedTranscript();
+  if (!transcript || !prompt || !openaiKey || !baseUrl || !model) {
+    showError('Add an AI prompt, API URL, model name, and API key before processing.');
+    return;
+  }
+  const button = document.getElementById('aiProcessBtn');
+  const output = document.getElementById('aiOutput');
+  button.disabled = true;
+  button.textContent = 'Processing...';
+  output.classList.remove('show');
+  try {
+    const response = await fetch(API + '/v1/ai-process', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript, prompt, openai_api_key: openaiKey, base_url: baseUrl, model }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'AI processing failed (' + response.status + ')');
+    output.textContent = data.output;
+    output.classList.add('show');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = '✨ Process result';
+  }
+}
+
+/* ── Actions ── */
+function copyText() {
+  const t = mappedTranscript();
+  navigator.clipboard.writeText(t).then(() => {
+    const btn = event.target.closest('button');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✅ Copied!';
+    setTimeout(() => btn.innerHTML = orig, 1500);
+  });
+}
+
+function downloadTxt() {
+  const t = mappedTranscript();
+  const b = new Blob([t], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = 'transcription_' + (currentJobId || 'result') + '.txt';
+  a.click();
+}
+
+function srtTime(seconds) {
+  const ms = Math.max(0, Math.round(seconds * 1000));
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor((ms % 60000) / 1000), r = ms % 1000;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(r).padStart(3,'0')}`;
+}
+function downloadSrt() {
+  const turns = meetingTurns();
+  if (!turns.length) { showError('SRT is not available for this transcription.'); return; }
+  const content = turns.map((turn, index) => `${index + 1}\n${srtTime(turn.start)} --> ${srtTime(turn.end)}\n${displaySpeaker(turn.speaker)}: ${turn.text || ''}\n`).join('\n');
+  const blob = new Blob([content], { type: 'application/x-subrip;charset=utf-8' });
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'transcription_' + (currentJobId || 'result') + '.srt'; link.click(); URL.revokeObjectURL(link.href);
+}
+
+/* ── Tabs ── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── Progress / Error helpers ── */
+function showProgress(msg, indeterminate = false) {
+  document.getElementById('progressMsg').textContent = msg;
+  document.getElementById('progressWrap').classList.add('show');
+  const bar = document.getElementById('progressBar');
+  if (indeterminate) bar.classList.add('indeterminate');
+  else bar.classList.remove('indeterminate');
+  document.getElementById('submitBtn').disabled = true;
+}
+function hideProgress() {
+  document.getElementById('progressWrap').classList.remove('show');
+  document.getElementById('submitBtn').disabled = !audioBlob;
+}
+function showError(msg) {
+  const b = document.getElementById('errorBox');
+  b.textContent = '⚠️ ' + msg;
+  b.classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+</script>
+</body>
+</html>

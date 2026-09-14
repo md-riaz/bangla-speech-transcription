@@ -8,19 +8,7 @@ services:
     container_name: call-intelligence-pipeline
     restart: unless-stopped
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.whisper-bn-http.entrypoints=web"
-      - "traefik.http.routers.whisper-bn-http.rule=Host(`whisper-bn.ai-api.ancbd.com`)"
-      - "traefik.http.routers.whisper-bn-http.middlewares=https-redirect@file"
-      - "traefik.http.routers.whisper-bn-http.service=whisper-bn"
-      - "traefik.http.routers.whisper-bn.entrypoints=websecure"
-      - "traefik.http.routers.whisper-bn.rule=Host(`whisper-bn.ai-api.ancbd.com`)"
-      - "traefik.http.routers.whisper-bn.tls=true"
-      - "traefik.http.routers.whisper-bn.tls.certresolver=letsencrypt"
-      - "traefik.http.services.whisper-bn.loadbalancer.server.port=3433"
-    # The current host's Docker bridge DNS cannot resolve external hosts.
-    # Host networking lets both image builds and the running app use the host
-    # network stack without changing the Docker daemon or production services.
+      - "traefik.enable=false"
     network_mode: host
     environment:
       PORT: "${PORT:-3433}"
@@ -32,10 +20,14 @@ services:
       HF_HOME: "${HF_HOME:-/models}"
       TRANSFORMERS_CACHE: "${TRANSFORMERS_CACHE:-/models}"
       CUDA_VISIBLE_DEVICES: "${CUDA_VISIBLE_DEVICES:-0}"
-      ASR_BATCH_SIZE: "${ASR_BATCH_SIZE:-2}"
+      ASR_BATCH_SIZE: "${ASR_BATCH_SIZE:-1}"
       WEB_CONCURRENCY: "${WEB_CONCURRENCY:-2}"
       WEB_THREADS: "${WEB_THREADS:-4}"
       WEB_TIMEOUT: "${WEB_TIMEOUT:-300}"
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      PYANNOTE_MODEL_DIR: "/models/pyannote/community-1"
+      PYANNOTE_SEGMENTATION_CHECKPOINT: "/models/pyannote/bangla-segmentation/segmentation-epoch=39.ckpt"
+      DIARIZATION_DEVICE: "cuda:0"
     volumes:
       - ./samples:/app/samples:ro
       - ./transcripts:/app/transcripts
@@ -57,9 +49,6 @@ services:
       start_period: 20s
       retries: 3
 
-  # Optional second GPU worker. Use with a different PORT to avoid host-network
-  # conflicts, for example:
-  #   PORT=3434 CUDA_VISIBLE_DEVICES=1 docker compose up -d call-intelligence-pipeline-gpu1
   call-intelligence-pipeline-gpu1:
     profiles: ["gpu1"]
     extends:
@@ -75,10 +64,14 @@ services:
       HF_HOME: "${HF_HOME:-/models}"
       TRANSFORMERS_CACHE: "${TRANSFORMERS_CACHE:-/models}"
       CUDA_VISIBLE_DEVICES: "${CUDA_VISIBLE_DEVICES_GPU1:-1}"
-      ASR_BATCH_SIZE: "${ASR_BATCH_SIZE:-2}"
+      ASR_BATCH_SIZE: "${ASR_BATCH_SIZE:-1}"
       WEB_CONCURRENCY: "${WEB_CONCURRENCY_GPU1:-1}"
       WEB_THREADS: "${WEB_THREADS_GPU1:-2}"
       WEB_TIMEOUT: "${WEB_TIMEOUT:-300}"
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      PYANNOTE_MODEL_DIR: "/models/pyannote/community-1"
+      PYANNOTE_SEGMENTATION_CHECKPOINT: "/models/pyannote/bangla-segmentation/segmentation-epoch=39.ckpt"
+      DIARIZATION_DEVICE: "cuda:0"
 
 volumes:
   call-intelligence-models:

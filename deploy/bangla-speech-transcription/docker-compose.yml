@@ -1,0 +1,22 @@
+services:
+  bangla-speech-transcription:
+    image: nginx:alpine
+    container_name: bangla-speech-transcription
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bangla-speech-transcription-http.entrypoints=web"
+      - "traefik.http.routers.bangla-speech-transcription-http.rule=Host(`bntranscription.ai-api.ancbd.com`)"
+      - "traefik.http.routers.bangla-speech-transcription-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.bangla-speech-transcription-http.service=bangla-speech-transcription"
+      - "traefik.http.routers.bangla-speech-transcription.entrypoints=websecure"
+      - "traefik.http.routers.bangla-speech-transcription.rule=Host(`bntranscription.ai-api.ancbd.com`)"
+      - "traefik.http.routers.bangla-speech-transcription.tls=true"
+      - "traefik.http.routers.bangla-speech-transcription.tls.certresolver=letsencrypt"
+      - "traefik.http.services.bangla-speech-transcription.loadbalancer.server.port=3800"

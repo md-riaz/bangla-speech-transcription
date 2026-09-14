@@ -22,7 +22,7 @@ DEFAULT_FILTER = "highpass=f=200,lowpass=f=3400,loudnorm=I=-16:TP=-1.5:LRA=11"
 
 
 class AudioPreprocessor:
-    SUPPORTED = {".wav", ".mp3", ".ogg", ".opus", ".flac", ".m4a", ".aac", ".gsm", ".amr"}
+    SUPPORTED = {".wav", ".mp3", ".ogg", ".opus", ".flac", ".m4a", ".aac", ".gsm", ".amr", ".webm"}
 
     @staticmethod
     def convert(input_path, output_dir, audio_filter: str = DEFAULT_FILTER) -> str:

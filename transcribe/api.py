@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
+import urllib.error
+import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +18,7 @@ from .queue import TranscriptionQueue
 
 try:
     from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+    from pydantic import BaseModel, Field
     from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("FastAPI dependencies are missing. Install with: pip install '.[api]'") from exc
@@ -118,6 +123,7 @@ async def create_transcription(
         ),
         examples=["bn", "auto"],
     ),
+    diarize: bool = Form(False, description="Use local Pyannote diarization for mono meeting audio."),
     labels: str = Form(
         "Agent,Customer",
         description=(
@@ -144,6 +150,7 @@ async def create_transcription(
         output_dir=str(OUTPUT_DIR),
         language=None if language in (None, "", "auto") else language,
         labels=labels,
+        diarize=diarize,
     )
     background_tasks.add_task(_drain_queue)
     return JSONResponse(status_code=202, content={"job_id": job.id, "status": job.status, "engine": APP_NAME})
@@ -233,6 +240,57 @@ def get_transcription_alias(job_id: str, request: Request) -> dict:
 )
 def list_transcriptions(request: Request, limit: int = 100) -> dict:
     return {"jobs": [_job_to_http_dict(job, request) for job in queue.list_jobs(limit=limit)]}
+
+
+class AIProcessRequest(BaseModel):
+    transcript: str = Field(min_length=1, max_length=120_000)
+    prompt: str = Field(min_length=1, max_length=12_000)
+    openai_api_key: str = Field(min_length=8, max_length=512)
+    model: str = Field(min_length=1, max_length=128)
+    base_url: str = Field(min_length=8, max_length=2048)
+
+
+@app.post("/v1/ai-process", summary="Process a transcript with a user-supplied OpenAI key")
+def ai_process(request_body: AIProcessRequest) -> dict:
+    """Relay one transcript-processing request without storing the caller's OpenAI key."""
+    key = request_body.openai_api_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="Enter an API key")
+    model = request_body.model.strip()
+    parsed_url = urlparse(request_body.base_url.strip())
+    if parsed_url.scheme != "https" or not parsed_url.netloc:
+        raise HTTPException(status_code=400, detail="Enter an HTTPS OpenAI-compatible base URL")
+    base_url = request_body.base_url.strip().rstrip("/")
+    endpoint = base_url if base_url.endswith("/chat/completions") else f"{base_url}/chat/completions"
+
+    payload = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Follow the user's instruction. Preserve Bengali faithfully. Do not invent facts."},
+            {"role": "user", "content": f"Instruction:\n{request_body.prompt.strip()}\n\nTranscript:\n{request_body.transcript.strip()}"},
+        ],
+        "temperature": 0.2,
+    }).encode("utf-8")
+    upstream = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(upstream, timeout=120) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        content = body["choices"][0]["message"]["content"]
+        if not content:
+            raise ValueError("OpenAI returned no content")
+        return {"output": content, "model": model}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        if exc.code in (401, 403):
+            raise HTTPException(status_code=401, detail="OpenAI rejected the supplied API key") from exc
+        raise HTTPException(status_code=502, detail=f"OpenAI request failed ({exc.code}): {detail}") from exc
+    except (urllib.error.URLError, KeyError, IndexError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="OpenAI processing failed") from exc
 
 
 @app.get(
@@ -343,6 +401,25 @@ def _read_json(path: Path) -> dict:
         raise HTTPException(status_code=500, detail="Transcript JSON artifact is invalid") from exc
 
 
+def _cleanup_audio_artifacts(audio_path: str, temp_dir: Path) -> None:
+    """Delete uploaded audio and only its derived temporary files after a terminal job."""
+    source = Path(audio_path)
+    try:
+        source.unlink(missing_ok=True)
+    except OSError:
+        pass
+    stem = source.stem
+    for path in temp_dir.glob(f"{stem}*"):
+        if path.is_file():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+    derived_dir = temp_dir / f"diarized_{stem}"
+    if derived_dir.is_dir():
+        shutil.rmtree(derived_dir, ignore_errors=True)
+
+
 async def _drain_queue() -> None:
     while True:
         job = queue.claim_next()
@@ -357,11 +434,20 @@ async def _drain_queue() -> None:
                 engine="whisper-bn",
                 whisper_model_id=os.getenv("WHISPER_MODEL"),
             )
-            transcript = await asyncio.to_thread(pipeline.process_file, job.audio_path, False)
+            if job.diarize:
+                from .diarization import transcribe_diarized
+                started = asyncio.get_running_loop().time()
+                transcript = await asyncio.to_thread(transcribe_diarized, job.audio_path, pipeline.transcriber, job.language, pipeline.temp_dir, pipeline._model_label)
+                transcript.processing_time_seconds = round(asyncio.get_running_loop().time() - started, 2)
+                pipeline._save_outputs(transcript)
+            else:
+                transcript = await asyncio.to_thread(pipeline.process_file, job.audio_path, False)
             result_path = str(Path(job.output_dir) / f"{transcript.call_id}.json")
             if transcript.status != "success":
                 queue.fail_job(job.id, transcript.error or "Transcription failed")
             else:
                 queue.complete_job(job.id, result_path)
+            _cleanup_audio_artifacts(job.audio_path, pipeline.temp_dir)
         except Exception as exc:  # noqa: BLE001
             queue.fail_job(job.id, str(exc))
+            _cleanup_audio_artifacts(job.audio_path, Path(job.output_dir) / "_temp")
