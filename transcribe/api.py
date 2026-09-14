@@ -443,6 +443,12 @@ async def _drain_queue() -> None:
             else:
                 transcript = await asyncio.to_thread(pipeline.process_file, job.audio_path, False)
             result_path = str(Path(job.output_dir) / f"{transcript.call_id}.json")
+            if not Path(result_path).exists():
+                candidates = sorted(Path(job.output_dir).glob(f"{transcript.call_id}*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+                if candidates:
+                    result_path = str(candidates[0])
+                else:
+                    raise RuntimeError("Transcript artifact was not written")
             if transcript.status != "success":
                 queue.fail_job(job.id, transcript.error or "Transcription failed")
             else:
