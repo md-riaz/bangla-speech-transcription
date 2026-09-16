@@ -103,6 +103,27 @@ def health() -> dict:
     return {"status": "ok", "engine": APP_NAME}
 
 
+@app.get("/v1/models", summary="List available OpenAI-compatible models")
+def list_models() -> dict:
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "whisper-bn",
+                "object": "model",
+                "created": 0,
+                "owned_by": "local",
+            },
+            {
+                "id": "whisper-1",
+                "object": "model",
+                "created": 0,
+                "owned_by": "local",
+            },
+        ],
+    }
+
+
 @app.post(
     "/v1/audio/transcriptions",
     summary="Create OpenAI-compatible transcription",

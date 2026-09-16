@@ -16,6 +16,14 @@ Canonical transcription endpoint:
 POST /v1/audio/transcriptions
 ```
 
+Model discovery for routers that require it:
+
+```http
+GET /v1/models
+```
+
+It returns `whisper-bn` and `whisper-1`; both route to the local SAM15K Bengali model.
+
 Multipart fields:
 
 | Field | Default | Notes |

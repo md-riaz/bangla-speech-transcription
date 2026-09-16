@@ -16,7 +16,7 @@ curl http://SERVER_IP:3433/health
 
 ## OpenAI-compatible transcription
 
-Use Bearer auth for every `/v1/*` request:
+Use Bearer auth for every `/v1/*` request. Routers that require model discovery can call `GET /v1/models`; it returns `whisper-bn` and `whisper-1`.
 
 ```bash
 curl http://SERVER_IP:3433/v1/audio/transcriptions \
