@@ -1,115 +1,115 @@
-# whisper-bn
+# Bangla Speech Transcription
 
-A simplified Bengali ASR service for call recordings. The public API exposes one transcription engine, `whisper-bn`, backed by the SAM15K Bengali Whisper model, with durable SQLite job tracking. Call QA analysis is separate and works with any OpenAI-compatible Chat Completions endpoint.
+OpenAI-compatible Bengali audio transcription service backed by the local BitwiseMind SAM15K Whisper model, with optional Pyannote speaker separation and optional Gemini transcription/summary mode for the web UI.
 
-## Public FastAPI service
+## API
 
-Start the API:
+Authentication is strict OpenAI-style Bearer auth:
+
+```http
+Authorization: Bearer YOUR_SITE_API_KEY
+```
+
+Canonical transcription endpoint:
+
+```http
+POST /v1/audio/transcriptions
+```
+
+Multipart fields:
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `file` | required | Audio file: wav, mp3, m4a, flac, ogg, webm, etc. |
+| `model` | `whisper-bn` | Accepts `whisper-bn`, `whisper-1`, or a Gemini model when `engine=gemini`. |
+| `language` | `bn` | Use `bn` or `auto`. |
+| `diarize` | `false` | `true` enables local Pyannote speaker separation for local SAM15K. |
+| `labels` | `Agent,Customer` | Speaker labels for diarized output. |
+| `async` | `false` | `true` returns a job id for long audio. |
+| `engine` | `whisper-bn` | `whisper-bn` for local SAM15K, `gemini` for Gemini transcription. |
+| `gemini_api_key` | empty | Required only for BYOK Gemini transcription when no server Gemini key is configured. |
+
+### Synchronous transcription
+
+Best for short voice notes and integrations that expect an immediate OpenAI-style response:
 
 ```bash
-pip install ".[sam15000,api]"
+curl https://bntranscription.ai-api.ancbd.com/v1/audio/transcriptions \
+  -H "Authorization: Bearer YOUR_SITE_API_KEY" \
+  -F "file=@voice.mp3" \
+  -F "model=whisper-bn" \
+  -F "language=bn"
+```
+
+Response:
+
+```json
+{
+  "text": "পূর্ণ ট্রান্সক্রিপ্ট...",
+  "language": "bn",
+  "duration": 38.2,
+  "model": "whisper-bn/bitwisemind/sam_15000_clean_text_full_model",
+  "segments": [
+    {"id": 0, "start": 0.0, "end": 4.2, "text": "আসসালামু আলাইকুম", "speaker": "Speaker 1"}
+  ]
+}
+```
+
+### Async transcription for long audio
+
+Use the same endpoint with `async=true` for long calls/meetings:
+
+```bash
+curl https://bntranscription.ai-api.ancbd.com/v1/audio/transcriptions \
+  -H "Authorization: Bearer YOUR_SITE_API_KEY" \
+  -F "file=@long-call.mp3" \
+  -F "async=true" \
+  -F "diarize=true" \
+  -F "labels=Agent,Customer"
+```
+
+Response:
+
+```json
+{"job_id":"...","status":"queued","engine":"whisper-bn"}
+```
+
+Poll the job:
+
+```bash
+curl -H "Authorization: Bearer YOUR_SITE_API_KEY" \
+  https://bntranscription.ai-api.ancbd.com/v1/transcriptions/JOB_ID
+```
+
+Download artifacts:
+
+```text
+GET /v1/transcriptions/{job_id}/result
+GET /v1/transcriptions/{job_id}/text
+GET /v1/transcriptions/{job_id}/srt
+```
+
+The web UI uses the same OpenAI-compatible endpoint with `async=true` and `diarize=true`.
+
+## Local development
+
+```bash
+pip install ".[sam15000,api,diarization,gemini]"
 uvicorn transcribe.api:app --host 0.0.0.0 --port 3433
 ```
 
-Docker starts the same FastAPI app by default:
+Docker:
 
 ```bash
 docker compose up -d --build call-intelligence-pipeline
 ```
 
-Endpoints:
-
-- `GET /health` returns service health and engine name.
-- `POST /v1/transcriptions` accepts multipart audio upload and returns `202 {"job_id": ..., "status": "queued", "engine": "whisper-bn"}`.
-- `GET /v1/transcriptions/{job_id}` returns queued, processing, completed, or failed job state. Completed jobs include the full transcript JSON inline as `transcript`, not just an artifact path. They also include HTTP-accessible `urls.result_json`, `urls.text`, and `urls.srt` links.
-- `GET /v1/transcriptions/{job_id}/result` returns the completed structured transcript JSON over HTTP.
-- `GET /v1/transcriptions/{job_id}/text` returns the completed plain text transcript over HTTP.
-- `GET /v1/transcriptions/{job_id}/srt` returns the completed SRT subtitles over HTTP when available.
-- `GET /v1/transcriptions?limit=100` lists recent jobs. Completed jobs include inline `transcript` and artifact URLs when the JSON artifact is still available.
-- `GET /docs` opens the interactive OpenAPI docs.
-
-Example:
-
-```bash
-curl -F "file=@call.wav" -F "language=bn" -F "labels=Agent,Customer"   http://localhost:3433/v1/transcriptions
-
-curl http://localhost:3433/v1/transcriptions/JOB_ID
-curl http://localhost:3433/v1/transcriptions/JOB_ID/result
-curl http://localhost:3433/v1/transcriptions/JOB_ID/text
-```
-
-Completed job responses include both compatibility paths and the inline transcript payload:
-
-```json
-{
-  "id": "JOB_ID",
-  "status": "completed",
-  "engine": "whisper-bn",
-  "result_json_path": "./transcripts/call.json",
-  "result_path": "./transcripts/call.json",
-  "urls": {
-    "self": "http://localhost:3433/v1/transcriptions/JOB_ID",
-    "result_json": "http://localhost:3433/v1/transcriptions/JOB_ID/result",
-    "text": "http://localhost:3433/v1/transcriptions/JOB_ID/text",
-    "srt": "http://localhost:3433/v1/transcriptions/JOB_ID/srt"
-  },
-  "transcript": {
-    "call_id": "call",
-    "segments": [
-      {"start": 0.0, "end": 2.4, "speaker": "Agent", "text": "হ্যালো"}
-    ],
-    "full_text": "[Agent]: হ্যালো",
-    "status": "success"
-  }
-}
-```
-
-Clients should treat `result_json_path` and `result_path` as server-side artifact metadata only. Integration clients should use the inline `transcript` field or the HTTP `urls.*` links instead.
-
-Queue state is stored in SQLite at `ASR_QUEUE_DB`, default `./transcripts/transcription_queue.sqlite3`. Uploaded audio is stored under `ASR_UPLOAD_DIR`, default `./transcripts/uploads`. Transcript JSON/TXT/SRT outputs are written to `ASR_OUTPUT_DIR`, default `./transcripts`.
-
-## Local bulk CLI
-
-The CLI remains available for local/batch transcription. It now defaults to `whisper-bn`:
+## CLI
 
 ```bash
 transcribe --file call.wav --language bn --labels "Agent,Customer" --output transcripts
 transcribe --input samples --language bn --labels "Agent,Customer" --output transcripts
 ```
-
-The public FastAPI service always invokes `whisper-bn`.
-
-## OpenAI-compatible call QA analysis
-
-`transcribe-analyze` does not require Gemini. It calls any OpenAI-compatible `/v1/chat/completions` endpoint.
-
-```bash
-export OPENAI_API_KEY=sk-...
-export OPENAI_BASE_URL=https://api.openai.com/v1
-export OPENAI_MODEL=gpt-4o-mini
-transcribe-analyze --file transcripts/call.json
-
-transcribe-analyze --input transcripts --reanalyze --no-csv   --api-key sk-...   --base-url https://your-gateway.example.com/v1   --model your-model-name
-```
-
-The analyzer writes an `analysis` block back into each transcript JSON and stores `analysis.model_used` as `openai-compatible/<model>`.
-
-## Requirements
-
-- Python 3.9+
-- ffmpeg
-- For local ASR: PyTorch, Transformers, librosa, soundfile, and a GPU strongly recommended
-- For QA analysis only: an OpenAI-compatible API key, base URL, and model name
-
-## Docker notes
-
-The compose file uses host networking on the current experiment host to avoid Docker bridge DNS issues. It mounts:
-
-- `./samples:/app/samples:ro`
-- `./transcripts:/app/transcripts`
-- `call-intelligence-models:/models`
-
-Do not prune the `call-intelligence-models` volume if you want to preserve the Hugging Face model cache.
 
 ## Output files
 
@@ -119,4 +119,4 @@ For each successful transcription, the pipeline writes:
 - `<call_id>.txt` readable transcript
 - `<call_id>.srt` subtitles
 
-Audio samples and transcripts may contain private call data and are git-ignored.
+Audio samples, transcript outputs, model caches, and secrets are git-ignored and must not be committed.

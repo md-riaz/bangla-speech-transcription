@@ -7,7 +7,7 @@ COPY pyproject.toml README.md LICENSE requirements.txt ./
 COPY transcribe ./transcribe
 COPY demo/requirements.txt ./demo/requirements.txt
 RUN /opt/venv/bin/pip install --index-url https://download.pytorch.org/whl/cu128 torch torchaudio==2.11.0+cu128 \
- && /opt/venv/bin/pip install '.[sam15000,api,diarization]' \
+ && /opt/venv/bin/pip install '.[sam15000,api,diarization,gemini]' \
  && /opt/venv/bin/pip install -r requirements.txt \
  && /opt/venv/bin/pip install -r demo/requirements.txt \
  && /opt/venv/bin/pip uninstall -y torchcodec

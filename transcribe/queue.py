@@ -22,6 +22,8 @@ class QueueJob:
     created_at: str
     updated_at: str
     diarize: bool = False
+    engine: str = "whisper-bn"
+    model: Optional[str] = None
     result_json_path: Optional[str] = None
     error: Optional[str] = None
 
@@ -51,6 +53,8 @@ class TranscriptionQueue:
                     language TEXT,
                     labels TEXT NOT NULL,
                     diarize INTEGER NOT NULL DEFAULT 0,
+                    engine TEXT NOT NULL DEFAULT 'whisper-bn',
+                    model TEXT,
                     result_json_path TEXT,
                     error TEXT,
                     created_at TEXT NOT NULL,
@@ -58,10 +62,15 @@ class TranscriptionQueue:
                 )
                 """
             )
-            try:
-                conn.execute("ALTER TABLE jobs ADD COLUMN diarize INTEGER NOT NULL DEFAULT 0")
-            except sqlite3.OperationalError:
-                pass
+            for ddl in (
+                "ALTER TABLE jobs ADD COLUMN diarize INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE jobs ADD COLUMN engine TEXT NOT NULL DEFAULT 'whisper-bn'",
+                "ALTER TABLE jobs ADD COLUMN model TEXT",
+            ):
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass
             conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)")
 
     @staticmethod
@@ -75,6 +84,8 @@ class TranscriptionQueue:
         language: Optional[str] = "bn",
         labels: str = "Agent,Customer",
         diarize: bool = False,
+        engine: str = "whisper-bn",
+        model: Optional[str] = None,
     ) -> QueueJob:
         job = QueueJob(
             id=str(uuid.uuid4()),
@@ -84,14 +95,16 @@ class TranscriptionQueue:
             language=language,
             labels=labels,
             diarize=diarize,
+            engine=engine,
+            model=model,
             created_at=self._now(),
             updated_at=self._now(),
         )
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO jobs (id, status, audio_path, output_dir, language, labels, diarize, created_at, updated_at)
-                VALUES (:id, :status, :audio_path, :output_dir, :language, :labels, :diarize, :created_at, :updated_at)
+                INSERT INTO jobs (id, status, audio_path, output_dir, language, labels, diarize, engine, model, created_at, updated_at)
+                VALUES (:id, :status, :audio_path, :output_dir, :language, :labels, :diarize, :engine, :model, :created_at, :updated_at)
                 """,
                 asdict(job),
             )
@@ -147,12 +160,13 @@ class TranscriptionQueue:
     def _row_to_job(row: sqlite3.Row) -> QueueJob:
         data = {key: row[key] for key in row.keys()}
         data["diarize"] = bool(data.get("diarize", False))
+        data["engine"] = data.get("engine") or "whisper-bn"
         return QueueJob(**data)
 
     @staticmethod
     def job_to_dict(job: QueueJob) -> dict:
         data = asdict(job)
-        data["engine"] = "whisper-bn"
+        data["engine"] = job.engine or "whisper-bn"
         data["result_path"] = job.result_json_path
         data["transcript"] = None
         if job.result_json_path and Path(job.result_json_path).exists():

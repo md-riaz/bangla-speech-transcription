@@ -1,17 +1,11 @@
 # Docker deployment
 
-This repo runs the public `whisper-bn` FastAPI transcription queue in Docker.
+This repo runs the `whisper-bn` FastAPI transcription service in Docker.
 
 ## Build and run
 
 ```bash
 docker compose up -d --build call-intelligence-pipeline
-```
-
-Open:
-
-```text
-http://SERVER_IP:3433/docs
 ```
 
 Health check:
@@ -20,21 +14,36 @@ Health check:
 curl http://SERVER_IP:3433/health
 ```
 
-Submit a transcription job:
+## OpenAI-compatible transcription
+
+Use Bearer auth for every `/v1/*` request:
 
 ```bash
-curl -F "file=@samples/call.wav" -F "language=bn" -F "labels=Agent,Customer"   http://SERVER_IP:3433/v1/transcriptions
+curl http://SERVER_IP:3433/v1/audio/transcriptions \
+  -H "Authorization: Bearer YOUR_SITE_API_KEY" \
+  -F "file=@samples/call.wav" \
+  -F "model=whisper-bn" \
+  -F "language=bn"
 ```
 
-Check a job:
+For long audio, use the same endpoint asynchronously:
 
 ```bash
-curl http://SERVER_IP:3433/v1/transcriptions/JOB_ID
-curl http://SERVER_IP:3433/v1/transcriptions/JOB_ID/result
-curl http://SERVER_IP:3433/v1/transcriptions/JOB_ID/text
+curl http://SERVER_IP:3433/v1/audio/transcriptions \
+  -H "Authorization: Bearer YOUR_SITE_API_KEY" \
+  -F "file=@samples/long-call.wav" \
+  -F "async=true" \
+  -F "diarize=true" \
+  -F "labels=Agent,Customer"
 ```
 
-Completed job responses include inline `transcript` JSON and HTTP artifact links under `urls`. Use `/v1/transcriptions/JOB_ID/result` or `/text` from client code instead of reading `result_path`, which is server-side metadata.
+Poll or download async results:
+
+```bash
+curl -H "Authorization: Bearer YOUR_SITE_API_KEY" http://SERVER_IP:3433/v1/transcriptions/JOB_ID
+curl -H "Authorization: Bearer YOUR_SITE_API_KEY" http://SERVER_IP:3433/v1/transcriptions/JOB_ID/result
+curl -H "Authorization: Bearer YOUR_SITE_API_KEY" http://SERVER_IP:3433/v1/transcriptions/JOB_ID/text
+```
 
 ## Volumes
 
@@ -48,6 +57,7 @@ Do not prune `call-intelligence-models` if you want to preserve model downloads.
 
 ```bash
 PORT=3433
+SITE_API_KEY=change-me
 MODEL_PROVIDER=whisper-bn
 WHISPER_MODEL=bitwisemind/sam_15000_clean_text_full_model
 ASR_QUEUE_DB=/app/transcripts/transcription_queue.sqlite3
@@ -56,16 +66,6 @@ ASR_OUTPUT_DIR=/app/transcripts
 CUDA_VISIBLE_DEVICES=0
 ```
 
-OpenAI-compatible QA analysis is a CLI feature. Provide these only when running `transcribe-analyze`:
-
-```bash
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
-```
-
 ## Host reverse proxy
 
 This compose file uses `network_mode: host` because the current server's Docker bridge DNS cannot resolve package repositories or external API hosts. The app listens on `0.0.0.0:${PORT:-3433}` on the host.
-
-If you later fix Docker daemon DNS and want Traefik Docker-label routing, create a separate override file that removes `network_mode: host`, restores a bridge network and `ports`, then adds Traefik labels. Do not edit production Traefik services directly.

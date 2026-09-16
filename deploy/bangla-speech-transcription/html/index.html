@@ -491,17 +491,19 @@ main {
 .ai-panel { margin-top: 24px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--accent-lt) 42%, var(--surface)); }
 .ai-panel h3 { font-size: .96rem; margin-bottom: 4px; }
 .ai-panel p { color: var(--text-sub); font-size: .8rem; line-height: 1.45; margin-bottom: 14px; }
-.ai-panel textarea, .ai-panel input { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 10px 12px; font: inherit; outline: none; transition: border-color 160ms ease, box-shadow 160ms ease; }
-.ai-panel textarea:focus, .ai-panel input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.ai-panel textarea, .ai-panel input, .ai-panel select { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); padding: 10px 12px; font: inherit; outline: none; transition: border-color 160ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+.ai-panel select { appearance: none; padding-right: 38px; background-image: linear-gradient(45deg, transparent 50%, var(--text-sub) 50%), linear-gradient(135deg, var(--text-sub) 50%, transparent 50%); background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
+.ai-panel textarea:focus, .ai-panel input:focus, .ai-panel select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 .ai-panel textarea { min-height: 116px; resize: vertical; }
-.ai-config-grid { display: grid; grid-template-columns: 1.55fr .85fr; gap: 10px; margin: 12px 0; }
+.ai-config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; align-items: end; }
+.ai-field-wide { grid-column: 1 / -1; }
 .field-label { display:block; margin: 0 0 6px; color: var(--text-sub); font-size: .72rem; font-weight: 700; letter-spacing: .35px; text-transform: uppercase; }
 .ai-key-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
-.ai-key-row .btn-action { min-height: 38px; padding: 7px 11px; align-self: end; justify-content: center; white-space: nowrap; }
-.ai-key-row input { padding: 8px 10px; }
+.ai-key-row .btn-action { min-height: 40px; padding: 8px 12px; align-self: end; justify-content: center; white-space: nowrap; }
+.ai-key-row input { padding: 9px 10px; }
 .ai-output { display: none; white-space: pre-wrap; margin-top: 16px; padding: 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); line-height: 1.65; }
 .ai-output.show { display: block; }
-@media (max-width: 540px) { .ai-config-grid, .ai-key-row { grid-template-columns: 1fr; } .ai-key-row .btn-action { justify-content:center; } }
+@media (max-width: 640px) { .ai-config-grid, .ai-key-row { grid-template-columns: 1fr; } .ai-key-row .btn-action { justify-content:center; } }
 
 /* ── Tabs ── */
 .tabs {
@@ -621,7 +623,8 @@ footer {
       <textarea id="aiPrompt" maxlength="12000" placeholder="Example: Summarize this audio in Bangla with action items."></textarea>
       <button class="btn-action" type="button" onclick="useMeetingNotesPrompt()">Use meeting-notes template</button>
       <div class="ai-config-grid">
-        <div><label class="field-label" for="openaiUrl">Provider URL</label><input type="url" id="openaiUrl" value="https://api.openai.com/v1" autocomplete="url" placeholder="https://api.openai.com/v1" oninput="saveAIConfig()"></div>
+        <div class="ai-field-wide"><label class="field-label" for="providerMode">Mode</label><select id="providerMode" onchange="applyProviderMode(); saveAIConfig()"><option value="local-openai" selected>Local transcription + OpenAI-compatible summary</option><option value="gemini">Gemini transcription + Gemini summary</option></select></div>
+        <div id="providerUrlGroup"><label class="field-label" for="openaiUrl">Provider URL</label><input type="url" id="openaiUrl" value="https://api.openai.com/v1" autocomplete="url" placeholder="https://api.openai.com/v1" oninput="saveAIConfig()"></div>
         <div><label class="field-label" for="openaiModel">Model</label><input type="text" id="openaiModel" value="gpt-4o-mini" maxlength="128" autocomplete="off" placeholder="gpt-4o-mini" oninput="saveAIConfig()"></div>
       </div>
       <div class="ai-key-row">
@@ -708,7 +711,7 @@ footer {
 <script>
 const MODELS = {
   'sra-vaani': {
-    api: '/api/whisper',
+    api: '',
     label: 'BitwiseMind SAM15K · Bengali Whisper',
     engine: 'whisper-bn'
   }};
@@ -732,11 +735,21 @@ Pending:
 }
 
 function getKey() { return document.getElementById('apiKeyInput').value.trim(); }
-function authHeaders() { const k = getKey(); return k ? { 'X-API-Key': k } : {}; }
+function authHeaders() { const k = getKey(); return k ? { 'Authorization': 'Bearer ' + k } : {}; }
 function saveApiKey(v) { try { localStorage.setItem('sra_api_key', v); } catch {} }
+function providerMode() { return document.getElementById('providerMode').value; }
+function applyProviderMode() {
+  const gemini = providerMode() === 'gemini';
+  document.getElementById('providerUrlGroup').style.display = gemini ? 'none' : '';
+  document.querySelector('label[for="openaiKey"]').textContent = gemini ? 'Gemini API key' : 'Provider API key';
+  document.getElementById('openaiModel').placeholder = gemini ? 'gemini-3.1-flash-lite' : 'gpt-4o-mini';
+  const modelInput = document.getElementById('openaiModel');
+  if (gemini && (!modelInput.value.trim() || modelInput.value.startsWith('gpt-'))) modelInput.value = 'gemini-3.1-flash-lite';
+}
 function saveAIConfig() {
   try {
     localStorage.setItem('sra_ai_config', JSON.stringify({
+      provider: providerMode(),
       baseUrl: document.getElementById('openaiUrl').value.trim(),
       model: document.getElementById('openaiModel').value.trim(),
       apiKey: document.getElementById('openaiKey').value,
@@ -746,10 +759,12 @@ function saveAIConfig() {
 function loadAIConfig() {
   try {
     const config = JSON.parse(localStorage.getItem('sra_ai_config') || '{}');
+    if (config.provider) document.getElementById('providerMode').value = config.provider;
     if (config.baseUrl) document.getElementById('openaiUrl').value = config.baseUrl;
     if (config.model) document.getElementById('openaiModel').value = config.model;
     if (config.apiKey) document.getElementById('openaiKey').value = config.apiKey;
   } catch {}
+  applyProviderMode();
 }
 
 let audioBlob = null;
@@ -904,21 +919,23 @@ async function startTranscription() {
   clearResult();
   showProgress('Uploading audio...');
   hideError();
+  document.getElementById('progressPct').textContent = '0%';
+  document.getElementById('progressBar').style.width = '0%';
 
   const fd = new FormData();
   fd.append('file', audioBlob, audioFileName);
   fd.append('language', document.getElementById('langSelect').value === 'auto' ? 'auto' : 'bn');
   fd.append('labels', document.getElementById('speakerHintsInput').value.trim() || 'Speaker 1');
   fd.append('diarize', 'true');
+  fd.append('async', 'true');
+  fd.append('engine', providerMode() === 'gemini' ? 'gemini' : 'whisper-bn');
+  if (providerMode() === 'gemini') {
+    fd.append('model', document.getElementById('openaiModel').value.trim() || 'gemini-3.1-flash-lite');
+    fd.append('gemini_api_key', document.getElementById('openaiKey').value.trim());
+  }
 
   try {
-    const r = await fetch(API + '/v1/transcriptions', { method: 'POST', body: fd, headers: authHeaders() });
-    if (!r.ok) {
-      if (r.status === 401) throw new Error('Invalid API key — please check the API Key field.');
-      const e = await r.json().catch(() => ({}));
-      throw new Error(e.detail || 'Upload failed (' + r.status + ')');
-    }
-    const job = await r.json();
+    const job = await uploadTranscription(fd);
     currentJobId = job.job_id;
     saveHistoryId(job.job_id);
     document.getElementById('metaJob').textContent = job.job_id;
@@ -928,6 +945,36 @@ async function startTranscription() {
     hideProgress();
     showError(err.message);
   }
+}
+
+function uploadTranscription(formData) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API + '/v1/audio/transcriptions');
+    for (const [key, value] of Object.entries(authHeaders())) xhr.setRequestHeader(key, value);
+    xhr.upload.onprogress = event => {
+      if (!event.lengthComputable) return;
+      const pct = Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100)));
+      document.getElementById('progressPct').textContent = pct + '%';
+      document.getElementById('progressBar').style.width = pct + '%';
+      showProgress('Uploading audio... ' + pct + '%');
+    };
+    xhr.onload = () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText || '{}'); } catch {}
+      if (xhr.status >= 200 && xhr.status < 300) {
+        document.getElementById('progressPct').textContent = '100%';
+        document.getElementById('progressBar').style.width = '100%';
+        resolve(body);
+      } else if (xhr.status === 401) {
+        reject(new Error('Invalid API key — please check the API Key field.'));
+      } else {
+        reject(new Error(body.detail || 'Upload failed (' + xhr.status + ')'));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Upload failed. Check your connection and try again.'));
+    xhr.send(formData);
+  });
 }
 
 async function pollJob(jobId) {
@@ -1017,7 +1064,8 @@ async function fetchResult(jobId, jobData) {
 }
 
 function hasAIConfig() {
-  return ['aiPrompt', 'openaiUrl', 'openaiModel', 'openaiKey'].every(id => document.getElementById(id).value.trim());
+  const required = providerMode() === 'gemini' ? ['aiPrompt', 'openaiModel', 'openaiKey'] : ['aiPrompt', 'openaiUrl', 'openaiModel', 'openaiKey'];
+  return required.every(id => document.getElementById(id).value.trim());
 }
 function meetingTurns() { return resultData?.turns || resultData?.segments || []; }
 function displaySpeaker(speaker) { return speakerNames[speaker]?.trim() || speaker || 'Speaker'; }
@@ -1086,9 +1134,10 @@ async function processWithAI() {
   const openaiKey = document.getElementById('openaiKey').value.trim();
   const baseUrl = document.getElementById('openaiUrl').value.trim();
   const model = document.getElementById('openaiModel').value.trim();
+  const provider = providerMode() === 'gemini' ? 'gemini' : 'openai';
   const transcript = mappedTranscript();
-  if (!transcript || !prompt || !openaiKey || !baseUrl || !model) {
-    showError('Add an AI prompt, API URL, model name, and API key before processing.');
+  if (!transcript || !prompt || !openaiKey || !model || (provider === 'openai' && !baseUrl)) {
+    showError(provider === 'gemini' ? 'Add an AI prompt, Gemini model, and Gemini API key before processing.' : 'Add an AI prompt, API URL, model name, and API key before processing.');
     return;
   }
   const button = document.getElementById('aiProcessBtn');
@@ -1100,7 +1149,7 @@ async function processWithAI() {
     const response = await fetch(API + '/v1/ai-process', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript, prompt, openai_api_key: openaiKey, base_url: baseUrl, model }),
+      body: JSON.stringify({ transcript, prompt, openai_api_key: openaiKey, base_url: baseUrl || 'https://generativelanguage.googleapis.com', model, provider }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || 'AI processing failed (' + response.status + ')');
@@ -1160,12 +1209,20 @@ function showProgress(msg, indeterminate = false) {
   document.getElementById('progressMsg').textContent = msg;
   document.getElementById('progressWrap').classList.add('show');
   const bar = document.getElementById('progressBar');
-  if (indeterminate) bar.classList.add('indeterminate');
-  else bar.classList.remove('indeterminate');
+  if (indeterminate) {
+    bar.classList.add('indeterminate');
+    document.getElementById('progressPct').textContent = '';
+  } else {
+    bar.classList.remove('indeterminate');
+  }
   document.getElementById('submitBtn').disabled = true;
 }
 function hideProgress() {
   document.getElementById('progressWrap').classList.remove('show');
+  document.getElementById('progressPct').textContent = '';
+  const bar = document.getElementById('progressBar');
+  bar.classList.remove('indeterminate');
+  bar.style.width = '0%';
   document.getElementById('submitBtn').disabled = !audioBlob;
 }
 function showError(msg) {

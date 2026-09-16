@@ -53,6 +53,35 @@ app = FastAPI(
     ),
 )
 queue = TranscriptionQueue(DB_PATH)
+_JOB_GEMINI_KEYS: dict[str, str] = {}
+
+
+def _normalize_engine(engine: str) -> str:
+    selected = (engine or "whisper-bn").strip().lower()
+    if selected in {"whisper-bn", "local", "local-openai", "whisper-1"}:
+        return "whisper-bn"
+    if selected == "gemini":
+        return "gemini"
+    raise HTTPException(status_code=400, detail="Unsupported transcription engine")
+
+
+def _require_bearer(authorization: Optional[str]) -> None:
+    expected = os.getenv("SITE_API_KEY")
+    if not expected:
+        return
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or token != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing bearer token")
+
+
+@app.middleware("http")
+async def require_bearer_for_v1(request: Request, call_next):
+    if request.url.path.startswith("/v1/"):
+        try:
+            _require_bearer(request.headers.get("authorization"))
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return await call_next(request)
 
 
 @app.get(
@@ -75,85 +104,35 @@ def health() -> dict:
 
 
 @app.post(
-    "/v1/transcriptions",
-    summary="Create Transcription",
-    description=(
-        "Upload an audio file and create an asynchronous Bengali transcription job. "
-        "The response returns a `job_id` immediately. Poll `GET /v1/transcriptions/{job_id}` "
-        "until `status` becomes `completed` or `failed`."
-    ),
-    responses={
-        202: {
-            "description": "The audio was accepted and queued for transcription.",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "job_id": "01J4W4Q0R7M7MZ3M8P0N9B4K2T",
-                        "status": "queued",
-                        "engine": "whisper-bn",
-                    }
-                }
-            },
-        },
-        400: {
-            "description": "Unsupported uploaded audio format.",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Unsupported audio format: .txt"}
-                }
-            },
-        },
-    },
+    "/v1/audio/transcriptions",
+    summary="Create OpenAI-compatible transcription",
+    description="Transcribe audio with the OpenAI-compatible audio transcription shape. Set async=true to receive a queued job id for long audio.",
 )
-async def create_transcription(
+async def create_openai_transcription(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(
-        ...,
-        description=(
-            "Audio file to transcribe. Supported formats are those accepted by the "
-            "service audio preprocessor, such as wav, mp3, m4a, flac, ogg, and webm."
-        ),
-    ),
-    language: Optional[str] = Form(
-        "bn",
-        description=(
-            "Language hint for ASR. Use `bn` for Bengali, which is the recommended "
-            "default for this service. Use `auto` or leave empty to let the backend "
-            "auto-detect when supported."
-        ),
-        examples=["bn", "auto"],
-    ),
-    diarize: bool = Form(False, description="Use local Pyannote diarization for mono meeting audio."),
-    labels: str = Form(
-        "Agent,Customer",
-        description=(
-            "Comma-separated speaker labels used in the transcript output. Provide two "
-            "labels in call order, for example `Agent,Customer`, `Rep,Caller`, or "
-            "`Doctor,Patient`."
-        ),
-        examples=["Agent,Customer", "Rep,Caller", "Doctor,Patient"],
-    ),
+    file: UploadFile = File(...),
+    model: Optional[str] = Form(None),
+    language: Optional[str] = Form("bn"),
+    diarize: bool = Form(False),
+    async_response: bool = Form(False, alias="async"),
+    engine: str = Form("whisper-bn"),
+    gemini_api_key: Optional[str] = Form(None),
+    labels: str = Form("Agent,Customer"),
 ) -> JSONResponse:
-    suffix = Path(file.filename or "audio").suffix.lower()
-    if suffix and suffix not in AudioPreprocessor.SUPPORTED:
-        raise HTTPException(status_code=400, detail=f"Unsupported audio format: {suffix}")
+    job = _create_uploaded_job(file, language, diarize, engine, model, gemini_api_key, labels)
+    if async_response:
+        background_tasks.add_task(_drain_queue)
+        return JSONResponse(status_code=202, content={"job_id": job.id, "status": job.status, "engine": job.engine})
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    safe_name = Path(file.filename or "audio.wav").name
-    path = UPLOAD_DIR / f"{os.urandom(8).hex()}_{safe_name}"
-    with path.open("wb") as fh:
-        shutil.copyfileobj(file.file, fh)
-
-    job = queue.create_job(
-        audio_path=str(path),
-        output_dir=str(OUTPUT_DIR),
-        language=None if language in (None, "", "auto") else language,
-        labels=labels,
-        diarize=diarize,
-    )
-    background_tasks.add_task(_drain_queue)
-    return JSONResponse(status_code=202, content={"job_id": job.id, "status": job.status, "engine": APP_NAME})
+    try:
+        result_path = await _process_job(job)
+        queue.complete_job(job.id, result_path)
+        transcript = _read_json(Path(result_path))
+        return JSONResponse(content=_openai_transcription_response(transcript, job))
+    except Exception as exc:  # noqa: BLE001
+        queue.fail_job(job.id, str(exc))
+        _cleanup_audio_artifacts(job.audio_path, Path(job.output_dir) / "_temp")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get(
@@ -204,14 +183,6 @@ def get_transcription(job_id: str, request: Request) -> dict:
 
 
 @app.get(
-    "/transcriptions/{job_id}",
-    include_in_schema=False,
-)
-def get_transcription_alias(job_id: str, request: Request) -> dict:
-    return get_transcription(job_id, request)
-
-
-@app.get(
     "/v1/transcriptions",
     summary="List Transcriptions",
     description="List recent transcription jobs, newest first, for integration dashboards or polling tools.",
@@ -247,12 +218,22 @@ class AIProcessRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=12_000)
     openai_api_key: str = Field(min_length=8, max_length=512)
     model: str = Field(min_length=1, max_length=128)
-    base_url: str = Field(min_length=8, max_length=2048)
+    base_url: str = Field(default="https://api.openai.com/v1", min_length=8, max_length=2048)
+    provider: str = Field(default="openai", max_length=32)
 
 
 @app.post("/v1/ai-process", summary="Process a transcript with a user-supplied OpenAI key")
 def ai_process(request_body: AIProcessRequest) -> dict:
-    """Relay one transcript-processing request without storing the caller's OpenAI key."""
+    """Relay one transcript-processing request without storing the caller's provider key."""
+    provider = (request_body.provider or "openai").strip().lower()
+    if provider == "gemini":
+        return _gemini_process(request_body)
+    if provider != "openai":
+        raise HTTPException(status_code=400, detail="Unsupported AI provider")
+    return _openai_process(request_body)
+
+
+def _openai_process(request_body: AIProcessRequest) -> dict:
     key = request_body.openai_api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="Enter an API key")
@@ -293,6 +274,26 @@ def ai_process(request_body: AIProcessRequest) -> dict:
         raise HTTPException(status_code=502, detail="OpenAI processing failed") from exc
 
 
+def _gemini_process(request_body: AIProcessRequest) -> dict:
+    key = request_body.openai_api_key.strip()
+    model = request_body.model.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="Enter a Gemini API key")
+    try:
+        from google import genai
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(
+            model=model,
+            contents=f"Follow the user's instruction. Preserve Bengali faithfully. Do not invent facts.\n\nInstruction:\n{request_body.prompt.strip()}\n\nTranscript:\n{request_body.transcript.strip()}",
+        )
+        content = response.text or ""
+        if not content:
+            raise ValueError("Gemini returned no content")
+        return {"output": content, "model": model}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail="Gemini processing failed") from exc
+
+
 @app.get(
     "/v1/transcriptions/{job_id}/result",
     summary="Download Transcript JSON",
@@ -312,11 +313,6 @@ def ai_process(request_body: AIProcessRequest) -> dict:
 def get_transcription_result(job_id: str) -> JSONResponse:
     path = _completed_artifact_path(job_id, ".json")
     return JSONResponse(content=_read_json(path))
-
-
-@app.get("/transcriptions/{job_id}/result", include_in_schema=False)
-def get_transcription_result_alias(job_id: str) -> JSONResponse:
-    return get_transcription_result(job_id)
 
 
 @app.get(
@@ -341,11 +337,6 @@ def get_transcription_text(job_id: str) -> PlainTextResponse:
     return PlainTextResponse(str(transcript.get("full_text") or ""))
 
 
-@app.get("/transcriptions/{job_id}/text", include_in_schema=False)
-def get_transcription_text_alias(job_id: str) -> PlainTextResponse:
-    return get_transcription_text(job_id)
-
-
 @app.get(
     "/v1/transcriptions/{job_id}/srt",
     summary="Download Transcript SRT",
@@ -359,11 +350,6 @@ def get_transcription_text_alias(job_id: str) -> PlainTextResponse:
 def get_transcription_srt(job_id: str) -> FileResponse:
     path = _completed_artifact_path(job_id, ".srt")
     return FileResponse(path, media_type="application/x-subrip", filename=path.name)
-
-
-@app.get("/transcriptions/{job_id}/srt", include_in_schema=False)
-def get_transcription_srt_alias(job_id: str) -> FileResponse:
-    return get_transcription_srt(job_id)
 
 
 def _get_job_or_404(job_id: str):
@@ -401,6 +387,98 @@ def _read_json(path: Path) -> dict:
         raise HTTPException(status_code=500, detail="Transcript JSON artifact is invalid") from exc
 
 
+def _create_uploaded_job(
+    file: UploadFile,
+    language: Optional[str],
+    diarize: bool,
+    engine: str,
+    model: Optional[str],
+    gemini_api_key: Optional[str],
+    labels: str,
+):
+    suffix = Path(file.filename or "audio").suffix.lower()
+    if suffix and suffix not in AudioPreprocessor.SUPPORTED:
+        raise HTTPException(status_code=400, detail=f"Unsupported audio format: {suffix}")
+    engine = _normalize_engine(engine)
+    model = (model or "").strip() or None
+    gemini_api_key = (gemini_api_key or "").strip() or None
+    if engine == "gemini" and not (gemini_api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEYS")):
+        raise HTTPException(status_code=400, detail="Enter a Gemini API key")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(file.filename or "audio.wav").name
+    path = UPLOAD_DIR / f"{os.urandom(8).hex()}_{safe_name}"
+    with path.open("wb") as fh:
+        shutil.copyfileobj(file.file, fh)
+
+    job = queue.create_job(
+        audio_path=str(path),
+        output_dir=str(OUTPUT_DIR),
+        language=None if language in (None, "", "auto") else language,
+        labels=labels,
+        diarize=diarize,
+        engine=engine,
+        model=model,
+    )
+    if gemini_api_key:
+        _JOB_GEMINI_KEYS[job.id] = gemini_api_key
+    return job
+
+
+def _openai_transcription_response(transcript: dict, job) -> dict:
+    segments = transcript.get("segments") or transcript.get("turns") or []
+    return {
+        "text": transcript.get("full_text") or "\n".join(str(segment.get("text", "")) for segment in segments).strip(),
+        "language": transcript.get("language_detected") or job.language or "bn",
+        "duration": transcript.get("duration_seconds"),
+        "model": transcript.get("model_used") or job.model or job.engine,
+        "segments": [
+            {
+                "id": index,
+                "start": segment.get("start", 0),
+                "end": segment.get("end", 0),
+                "text": segment.get("text", ""),
+                "speaker": segment.get("speaker") or "",
+            }
+            for index, segment in enumerate(segments)
+        ],
+    }
+
+
+async def _process_job(job) -> str:
+    labels = tuple((job.labels.split(",", 1) + ["Customer"])[:2])
+    engine = _normalize_engine(job.engine)
+    pipeline = TranscriptionPipeline(
+        output_dir=job.output_dir,
+        language=job.language,
+        speaker_labels=labels,
+        engine=engine,
+        whisper_model_id=os.getenv("WHISPER_MODEL") if engine == "whisper-bn" else None,
+        google_api_key=_JOB_GEMINI_KEYS.pop(job.id, None) if engine == "gemini" else None,
+        gemini_model_id=job.model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+    )
+    if job.diarize and engine != "gemini":
+        from .diarization import transcribe_diarized
+        started = asyncio.get_running_loop().time()
+        transcript = await asyncio.to_thread(transcribe_diarized, job.audio_path, pipeline.transcriber, job.language, pipeline.temp_dir, pipeline._model_label)
+        transcript.processing_time_seconds = round(asyncio.get_running_loop().time() - started, 2)
+        pipeline._save_outputs(transcript)
+    else:
+        transcript = await asyncio.to_thread(pipeline.process_file, job.audio_path, False)
+    result_path = str(Path(job.output_dir) / f"{transcript.call_id}.json")
+    if not Path(result_path).exists():
+        candidates = sorted(Path(job.output_dir).glob(f"{transcript.call_id}*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+        if candidates:
+            result_path = str(candidates[0])
+        else:
+            raise RuntimeError("Transcript artifact was not written")
+    if transcript.status != "success":
+        raise RuntimeError(transcript.error or "Transcription failed")
+    _cleanup_audio_artifacts(job.audio_path, pipeline.temp_dir)
+    return result_path
+
+
 def _cleanup_audio_artifacts(audio_path: str, temp_dir: Path) -> None:
     """Delete uploaded audio and only its derived temporary files after a terminal job."""
     source = Path(audio_path)
@@ -426,34 +504,8 @@ async def _drain_queue() -> None:
         if not job:
             return
         try:
-            labels = tuple((job.labels.split(",", 1) + ["Customer"])[:2])
-            pipeline = TranscriptionPipeline(
-                output_dir=job.output_dir,
-                language=job.language,
-                speaker_labels=labels,
-                engine="whisper-bn",
-                whisper_model_id=os.getenv("WHISPER_MODEL"),
-            )
-            if job.diarize:
-                from .diarization import transcribe_diarized
-                started = asyncio.get_running_loop().time()
-                transcript = await asyncio.to_thread(transcribe_diarized, job.audio_path, pipeline.transcriber, job.language, pipeline.temp_dir, pipeline._model_label)
-                transcript.processing_time_seconds = round(asyncio.get_running_loop().time() - started, 2)
-                pipeline._save_outputs(transcript)
-            else:
-                transcript = await asyncio.to_thread(pipeline.process_file, job.audio_path, False)
-            result_path = str(Path(job.output_dir) / f"{transcript.call_id}.json")
-            if not Path(result_path).exists():
-                candidates = sorted(Path(job.output_dir).glob(f"{transcript.call_id}*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
-                if candidates:
-                    result_path = str(candidates[0])
-                else:
-                    raise RuntimeError("Transcript artifact was not written")
-            if transcript.status != "success":
-                queue.fail_job(job.id, transcript.error or "Transcription failed")
-            else:
-                queue.complete_job(job.id, result_path)
-            _cleanup_audio_artifacts(job.audio_path, pipeline.temp_dir)
+            result_path = await _process_job(job)
+            queue.complete_job(job.id, result_path)
         except Exception as exc:  # noqa: BLE001
             queue.fail_job(job.id, str(exc))
             _cleanup_audio_artifacts(job.audio_path, Path(job.output_dir) / "_temp")

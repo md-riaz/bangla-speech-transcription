@@ -376,8 +376,7 @@ def test_api_completed_job_exposes_only_inline_result_and_downloads(tmp_path, mo
     assert result_response.json()["call_id"] == "call"
 
     alias_response = client.get(f"/transcriptions/{job.id}/result")
-    assert alias_response.status_code == 200
-    assert alias_response.json()["full_text"] == "[Agent]: হ্যালো"
+    assert alias_response.status_code == 404
 
     text_response = client.get(f"/v1/transcriptions/{job.id}/text")
     assert text_response.status_code == 200
