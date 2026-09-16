@@ -156,6 +156,14 @@ class TranscriptionQueue:
                 (error, self._now(), job_id),
             )
 
+    def requeue_processing_jobs(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE jobs SET status = 'queued', updated_at = ? WHERE status = 'processing'",
+                (self._now(),),
+            )
+            return cursor.rowcount
+
     @staticmethod
     def _row_to_job(row: sqlite3.Row) -> QueueJob:
         data = {key: row[key] for key in row.keys()}

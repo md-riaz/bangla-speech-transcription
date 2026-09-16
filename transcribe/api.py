@@ -84,6 +84,11 @@ async def require_bearer_for_v1(request: Request, call_next):
     return await call_next(request)
 
 
+@app.on_event("startup")
+def requeue_interrupted_jobs() -> None:
+    queue.requeue_processing_jobs()
+
+
 @app.get(
     "/health",
     summary="Health",

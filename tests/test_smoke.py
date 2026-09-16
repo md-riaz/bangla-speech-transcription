@@ -273,6 +273,11 @@ def test_queue_lifecycle(tmp_path):
     claimed = queue.claim_next()
     assert claimed.id == job.id
     assert claimed.status == "processing"
+    assert queue.requeue_processing_jobs() == 1
+    assert queue.get_job(job.id).status == "queued"
+    claimed = queue.claim_next()
+    assert claimed.id == job.id
+    assert claimed.status == "processing"
     queue.complete_job(job.id, str(tmp_path / "out.json"))
     assert queue.get_job(job.id).status == "completed"
 
