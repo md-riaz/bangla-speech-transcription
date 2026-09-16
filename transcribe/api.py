@@ -58,7 +58,7 @@ _JOB_GEMINI_KEYS: dict[str, str] = {}
 
 def _normalize_engine(engine: str) -> str:
     selected = (engine or "whisper-bn").strip().lower()
-    if selected in {"whisper-bn", "local", "local-openai", "whisper-1"}:
+    if selected in {"whisper-bn", "local", "local-openai", "bitwisemind/sam_15000_clean_text_full_model"}:
         return "whisper-bn"
     if selected == "gemini":
         return "gemini"
@@ -109,13 +109,7 @@ def list_models() -> dict:
         "object": "list",
         "data": [
             {
-                "id": "whisper-bn",
-                "object": "model",
-                "created": 0,
-                "owned_by": "local",
-            },
-            {
-                "id": "whisper-1",
+                "id": "bitwisemind/sam_15000_clean_text_full_model",
                 "object": "model",
                 "created": 0,
                 "owned_by": "local",

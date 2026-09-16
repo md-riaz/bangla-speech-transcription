@@ -16,13 +16,13 @@ curl http://SERVER_IP:3433/health
 
 ## OpenAI-compatible transcription
 
-Use Bearer auth for every `/v1/*` request. Routers that require model discovery can call `GET /v1/models`; it returns `whisper-bn` and `whisper-1`.
+Use Bearer auth for every `/v1/*` request. Routers that require model discovery can call `GET /v1/models`; it returns the original Hugging Face model id: `bitwisemind/sam_15000_clean_text_full_model`.
 
 ```bash
 curl http://SERVER_IP:3433/v1/audio/transcriptions \
   -H "Authorization: Bearer YOUR_SITE_API_KEY" \
   -F "file=@samples/call.wav" \
-  -F "model=whisper-bn" \
+  -F "model=bitwisemind/sam_15000_clean_text_full_model" \
   -F "language=bn"
 ```
 

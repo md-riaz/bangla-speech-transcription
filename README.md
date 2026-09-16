@@ -22,14 +22,14 @@ Model discovery for routers that require it:
 GET /v1/models
 ```
 
-It returns `whisper-bn` and `whisper-1`; both route to the local SAM15K Bengali model.
+It returns the original Hugging Face model id: `bitwisemind/sam_15000_clean_text_full_model`.
 
 Multipart fields:
 
 | Field | Default | Notes |
 | --- | --- | --- |
 | `file` | required | Audio file: wav, mp3, m4a, flac, ogg, webm, etc. |
-| `model` | `whisper-bn` | Accepts `whisper-bn`, `whisper-1`, or a Gemini model when `engine=gemini`. |
+| `model` | `bitwisemind/sam_15000_clean_text_full_model` | Use the original Hugging Face model id for local SAM15K, or a Gemini model when `engine=gemini`. |
 | `language` | `bn` | Use `bn` or `auto`. |
 | `diarize` | `false` | `true` enables local Pyannote speaker separation for local SAM15K. |
 | `labels` | `Agent,Customer` | Speaker labels for diarized output. |
@@ -45,7 +45,7 @@ Best for short voice notes and integrations that expect an immediate OpenAI-styl
 curl https://bntranscription.ai-api.ancbd.com/v1/audio/transcriptions \
   -H "Authorization: Bearer YOUR_SITE_API_KEY" \
   -F "file=@voice.mp3" \
-  -F "model=whisper-bn" \
+  -F "model=bitwisemind/sam_15000_clean_text_full_model" \
   -F "language=bn"
 ```
 
