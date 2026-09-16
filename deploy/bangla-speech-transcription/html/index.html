@@ -486,6 +486,12 @@ main {
   line-height: 1.8;
   color: var(--text);
 }
+.timestamp-row { display: grid; grid-template-columns: 92px minmax(110px, auto) minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.timestamp-row:last-child { border-bottom: 0; }
+.timestamp-time { color: var(--accent); font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timestamp-speaker { color: var(--text-sub); font-size: .78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timestamp-text { font-family: 'Hind Siliguri', sans-serif; line-height: 1.75; }
+@media (max-width: 640px) { .timestamp-row { grid-template-columns: 76px 1fr; } .timestamp-speaker { grid-column: 2; } .timestamp-text { grid-column: 1 / -1; } }
 
 /* ── AI processing ── */
 .ai-panel { margin-top: 24px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--accent-lt) 42%, var(--surface)); }
@@ -671,11 +677,15 @@ footer {
 
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('full', this)">Full Text</button>
+      <button class="tab-btn" onclick="switchTab('timestamped', this)">With Timestamps</button>
       <button class="tab-btn" onclick="switchTab('speakers', this)">By Speaker</button>
     </div>
 
     <div class="tab-pane active" id="tab-full">
       <div class="transcript-box" id="transcriptText"></div>
+    </div>
+    <div class="tab-pane" id="tab-timestamped">
+      <div id="timestampedBox"></div>
     </div>
     <div class="tab-pane" id="tab-speakers">
       <div id="speakerMapping" class="ai-panel" style="display:none"></div>
@@ -1069,12 +1079,22 @@ function hasAIConfig() {
 }
 function meetingTurns() { return resultData?.turns || resultData?.segments || []; }
 function displaySpeaker(speaker) { return speakerNames[speaker]?.trim() || speaker || 'Speaker'; }
+function fmtTime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
+function turnTimeLabel(turn) {
+  const start = fmtTime(turn.start);
+  return turn.end == null ? start : `${start}–${fmtTime(turn.end)}`;
+}
 function mappedTranscript() {
   const turns = meetingTurns();
   return turns.length ? turns.map(t => `[${displaySpeaker(t.speaker)}]: ${t.text || ''}`).join('\n') : document.getElementById('transcriptText').textContent.trim();
 }
 function refreshMappedResult() {
   document.getElementById('transcriptText').textContent = mappedTranscript();
+  renderTimestamped();
   renderSpeakers();
   if (hasAIConfig() && document.getElementById('aiOutput').classList.contains('show')) {
     clearTimeout(aiRefreshTimer);
@@ -1097,6 +1117,16 @@ function renderSpeakerMapping() {
     mapping.append(input);
   }
 }
+function renderTimestamped() {
+  const box = document.getElementById('timestampedBox'); box.replaceChildren();
+  for (const turn of meetingTurns()) {
+    const row = document.createElement('div'); row.className = 'timestamp-row';
+    const time = document.createElement('div'); time.className = 'timestamp-time'; time.textContent = turnTimeLabel(turn);
+    const speaker = document.createElement('div'); speaker.className = 'timestamp-speaker'; speaker.textContent = displaySpeaker(turn.speaker);
+    const text = document.createElement('div'); text.className = 'timestamp-text'; text.textContent = turn.text || '';
+    row.append(time, speaker, text); box.append(row);
+  }
+}
 function renderSpeakers() {
   const box = document.getElementById('speakersBox'); box.replaceChildren();
   for (const turn of meetingTurns()) {
@@ -1114,9 +1144,11 @@ function showResult(text, data) {
   document.getElementById('resultCard').classList.add('show');
   document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const turns = meetingTurns();
-  const tab = document.querySelector('[onclick="switchTab(\'speakers\', this)"]');
-  tab.style.display = turns.length ? '' : 'none';
-  renderSpeakerMapping(); renderSpeakers();
+  const speakerTab = document.querySelector('[onclick="switchTab(\'speakers\', this)"]');
+  const timestampTab = document.querySelector('[onclick="switchTab(\'timestamped\', this)"]');
+  speakerTab.style.display = turns.length ? '' : 'none';
+  timestampTab.style.display = turns.length ? '' : 'none';
+  renderSpeakerMapping(); renderTimestamped(); renderSpeakers();
   if (hasAIConfig()) processWithAI();
   if (data) { document.getElementById('metaLang').textContent = data.language || data.language_detected || 'Bengali'; document.getElementById('metaDur').textContent = data.duration ? data.duration.toFixed(1) + 's' : (data.duration_seconds ? data.duration_seconds.toFixed(1) + 's' : '—'); document.getElementById('metaProc').textContent = data.processing_time ? data.processing_time.toFixed(1) + 's' : '—'; }
 }
