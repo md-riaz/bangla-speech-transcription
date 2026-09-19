@@ -1067,7 +1067,7 @@ async function loadHistory() {
     const title = document.createElement('div'); title.className = 'history-title'; title.textContent = transcript.filename || job.id;
     const meta = document.createElement('div'); meta.className = 'history-meta';
     const badge = document.createElement('span'); badge.className = 'history-status ' + (job.status || ''); badge.textContent = job.status || 'unknown';
-    meta.textContent = [job.created_at, transcript.duration_seconds ? `${Math.round(transcript.duration_seconds)}s` : null].filter(Boolean).join(' · ');
+    meta.textContent = [job.created_at, transcript.duration_seconds ? fmtDuration(transcript.duration_seconds) : null].filter(Boolean).join(' · ');
     meta.append(badge); info.append(title, meta); item.append(info);
     if (job.status === 'completed') { const open = document.createElement('button'); open.className='btn-action'; open.type='button'; open.textContent='Open'; open.addEventListener('click', () => openHistoryResult(job.id)); item.append(open); }
     list.append(item);
@@ -1102,6 +1102,13 @@ function fmtTime(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
   const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
+function fmtDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  if (h) return `${h}h ${m}m ${s}s`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 function turnTimeLabel(turn) {
   const start = fmtTime(turn.start);
@@ -1169,7 +1176,13 @@ function showResult(text, data) {
   timestampTab.style.display = turns.length ? '' : 'none';
   renderSpeakerMapping(); renderTimestamped(); renderSpeakers();
   if (hasAIConfig()) processWithAI();
-  if (data) { document.getElementById('metaLang').textContent = data.language || data.language_detected || 'Bengali'; document.getElementById('metaDur').textContent = data.duration ? data.duration.toFixed(1) + 's' : (data.duration_seconds ? data.duration_seconds.toFixed(1) + 's' : '—'); document.getElementById('metaProc').textContent = data.processing_time ? data.processing_time.toFixed(1) + 's' : '—'; }
+  if (data) {
+    const audioDuration = data.duration ?? data.duration_seconds;
+    const processingTime = data.processing_time ?? data.processing_time_seconds;
+    document.getElementById('metaLang').textContent = data.language || data.language_detected || 'Bengali';
+    document.getElementById('metaDur').textContent = audioDuration ? fmtDuration(audioDuration) : '—';
+    document.getElementById('metaProc').textContent = processingTime ? fmtDuration(processingTime) : '—';
+  }
 }
 
 function clearResult() {
