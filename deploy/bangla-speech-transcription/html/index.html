@@ -589,6 +589,7 @@ footer {
       <div id="fileBadge" class="file-badge" style="display:none">
         <span>🎧</span>
         <span id="fileName">—</span>
+        <span id="fileMeta" style="opacity:.72"></span>
         <button onclick="clearFile()" title="Remove">✕</button>
       </div>
       <audio id="audioPreview" class="audio-preview" controls preload="metadata"></audio>
@@ -835,21 +836,34 @@ dropZone.addEventListener('drop', e => {
 });
 fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + ' ' + units[i];
+}
+function updateFileMeta(extra = '') {
+  const size = audioBlob?.size ? formatBytes(audioBlob.size) : '';
+  document.getElementById('fileMeta').textContent = [size, extra].filter(Boolean).join(' · ');
+}
 function setFile(f) {
   audioBlob = f;
   audioFileName = f.name;
   document.getElementById('fileName').textContent = f.name;
+  updateFileMeta();
   document.getElementById('fileBadge').style.display = 'inline-flex';
   setAudioPreview(f);
   dropZone.classList.add('has-file');
   document.getElementById('submitBtn').disabled = false;
   stopMic();
+  clearResult();
 }
 
 function clearFile() {
   audioBlob = null;
   audioFileName = 'recorded.webm';
   document.getElementById('fileName').textContent = '—';
+  document.getElementById('fileMeta').textContent = '';
   document.getElementById('fileBadge').style.display = 'none';
   clearAudioPreview();
   dropZone.classList.remove('has-file');
@@ -862,6 +876,7 @@ function setAudioPreview(source) {
   audioPreviewUrl = URL.createObjectURL(source);
   const player = document.getElementById('audioPreview');
   player.src = audioPreviewUrl;
+  player.onloadedmetadata = () => updateFileMeta(player.duration && isFinite(player.duration) ? fmtTime(player.duration) : '');
   player.classList.add('show');
 }
 function clearAudioPreview() {
