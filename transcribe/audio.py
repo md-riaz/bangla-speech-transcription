@@ -30,8 +30,7 @@ class AudioPreprocessor:
         p = Path(input_path)
         out = Path(output_dir) / f"{p.stem}_16k.wav"
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        if out.exists():
-            return str(out)
+        out.unlink(missing_ok=True)
         cmd = [
             "ffmpeg", "-i", str(p),
             "-ar", "16000", "-ac", "1", "-acodec", "pcm_s16le",
@@ -108,6 +107,7 @@ class StereoSplitter:
         right = Path(tmpdir) / f"{stem}_right.wav"
         Path(tmpdir).mkdir(parents=True, exist_ok=True)
         for out, ch in [(left, "c0=c0"), (right, "c0=c1")]:
+            out.unlink(missing_ok=True)
             subprocess.run(
                 [
                     "ffmpeg", "-i", str(path),

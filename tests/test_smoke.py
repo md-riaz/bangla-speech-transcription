@@ -23,6 +23,25 @@ def test_supported_formats():
     assert not AudioPreprocessor.supported("notes.txt")
 
 
+def test_convert_rebuilds_stale_temp_file(tmp_path, monkeypatch):
+    source = tmp_path / "clip.wav"
+    source.write_bytes(b"new audio")
+    stale = tmp_path / "clip_16k.wav"
+    stale.write_bytes(b"old audio")
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(cmd, capture_output, text):
+        stale.write_bytes(b"rebuilt audio")
+        return Result()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    assert AudioPreprocessor.convert(str(source), tmp_path) == str(stale)
+    assert stale.read_bytes() == b"rebuilt audio"
+
+
 def test_supported_extensionless_audio_probe(tmp_path, monkeypatch):
     audio = tmp_path / "savedly_sample"
     audio.write_bytes(b"not actually decoded because ffprobe is mocked")
