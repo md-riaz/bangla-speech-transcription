@@ -794,7 +794,6 @@ function loadAIConfig() {
 let audioBlob = null;
 let audioFileName = 'recorded.webm';
 let audioPreviewUrl = null;
-let aiRefreshTimer = null;
 let mediaRecorder = null;
 let recChunks = [];
 let recInterval = null;
@@ -1131,10 +1130,6 @@ function refreshMappedResult() {
   document.getElementById('transcriptText').textContent = mappedTranscript();
   renderTimestamped();
   renderSpeakers();
-  if (hasAIConfig() && document.getElementById('aiOutput').classList.contains('show')) {
-    clearTimeout(aiRefreshTimer);
-    aiRefreshTimer = setTimeout(processWithAI, 500);
-  }
 }
 function renderSpeakerMapping() {
   const mapping = document.getElementById('speakerMapping');
@@ -1217,7 +1212,7 @@ async function processWithAI() {
   const output = document.getElementById('aiOutput');
   button.disabled = true;
   button.textContent = 'Processing...';
-  output.classList.remove('show');
+  if (!output.textContent.trim()) output.classList.remove('show');
   try {
     const response = await fetch(API + '/v1/ai-process', {
       method: 'POST',
