@@ -730,15 +730,15 @@ let currentModel = MODELS['sra-vaani'];
 let API = currentModel.api;
 
 function useMeetingNotesPrompt() {
-  document.getElementById('aiPrompt').value = `নিচের বাংলা meeting transcript থেকে meeting notes তৈরি করো।
+  document.getElementById('aiPrompt').value = `নিচের meeting transcript থেকে concise meeting notes তৈরি করো।
 
-Output rules:
-- Markdown ব্যবহার করবে না। কোনো heading marker যেমন ##, ###, **bold**, table, code block ব্যবহার করবে না।
-- Plain text লিখবে, শুধু new lines এবং simple ASCII/safe symbols ব্যবহার করবে: -, 1., :, →, ()
-- Business term, technical term, product name, role, process name, deadline, status word English-এ স্বাভাবিক হলে English রাখবে। যেমন: Customer Retention, Action items, Pending, Support, Pricing, Negotiation, After-sales service, Management, Product Manager, Portfolio, Report, Deadline, Follow-up, Zimbra, CMM.
-- English term জোর করে বাংলা বানাবে না যদি সেটা পড়তে অস্বাভাবিক লাগে।
+Style:
+- Plain text only; Markdown heading/bold/table/code block ব্যবহার করবে না।
+- New lines এবং simple separators ব্যবহার করো: -, 1., :, →, ()
+- বাংলা স্বাভাবিক রাখো, কিন্তু business/technical/product terms English-এ বেশি readable হলে English রাখো।
+- Transcript-এর facts, names, numbers, dates, deadlines, and responsibilities faithful রাখো; invent করো না।
 
-Format:
+Use this shape, but content অনুযায়ী section/wording adjust করতে পারো:
 Meeting Notes
 
 Decision:
@@ -750,13 +750,11 @@ Action items:
 Pending:
 - ...
 
-Responsibility rules:
-- Action item-এর responsible person নির্ধারণ করবে কাজটি আসলে কাকে assign করা হয়েছে, কে কথাটি বলেছে তার ভিত্তিতে নয়।
-- যদি Speaker 1 কোনো task বলে এবং Speaker 2 acknowledge করে, তাহলে Speaker 2 responsible হতে পারে।
-- যদি কোনো speaker explicit person name বলে task assign করে, সেই person name ব্যবহার করবে।
-- যদি transcript-এ speaker label [CEO], [Sakib], [Speaker 1], [Speaker 2] থাকে, label হুবহু রাখবে; C, Speaker A, ব্যক্তি ১, নতুন নাম বা translated label বানাবে না।
-- যদি responsible person স্পষ্ট না হয়, লিখবে: উল্লেখ নেই
-- নাম, সংখ্যা, তারিখ, deadline এবং responsibility transcript-এ না থাকলে অনুমান করবে না।`;
+Responsibility:
+- Responsible person বের করবে actual assignment/context থেকে, শুধু কে কথা বলেছে সেটা দেখে নয়।
+- কেউ task assign করলে বা অন্য কেউ acknowledge করলে assigned/acknowledging person-কে responsible ধরো if clear.
+- Speaker labels transcript-এ যেমন আছে ঠিক তেমন রাখো; rename/translate/shorten করবে না।
+- Responsible person clear না হলে লিখবে: উল্লেখ নেই`;
   saveAIConfig();
 }
 
