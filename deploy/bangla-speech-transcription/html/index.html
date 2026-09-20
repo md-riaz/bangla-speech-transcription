@@ -632,7 +632,7 @@ footer {
       <div class="ai-config-grid">
         <div class="ai-field-wide"><label class="field-label" for="providerMode">Mode</label><select id="providerMode" onchange="applyProviderMode(); saveAIConfig()"><option value="local-openai" selected>Local transcription + OpenAI-compatible summary</option><option value="gemini">Gemini transcription + Gemini summary</option></select></div>
         <div id="providerUrlGroup"><label class="field-label" for="openaiUrl">Provider URL</label><input type="url" id="openaiUrl" value="https://api.openai.com/v1" autocomplete="url" placeholder="https://api.openai.com/v1" oninput="saveAIConfig()"></div>
-        <div><label class="field-label" for="openaiModel">Model</label><input type="text" id="openaiModel" value="gpt-4o-mini" maxlength="128" autocomplete="off" placeholder="gpt-4o-mini" oninput="saveAIConfig()"></div>
+        <div id="modelGroup"><label class="field-label" for="openaiModel">Model</label><input type="text" id="openaiModel" value="gpt-4o-mini" maxlength="128" autocomplete="off" placeholder="gpt-4o-mini" oninput="saveAIConfig()"></div>
       </div>
       <div class="ai-key-row">
         <div><label class="field-label" for="openaiKey">Provider API key</label><input type="password" id="openaiKey" autocomplete="off" placeholder="Stored in this browser only" oninput="saveAIConfig()"></div>
@@ -761,14 +761,13 @@ Responsibility:
 function getKey() { return document.getElementById('apiKeyInput').value.trim(); }
 function authHeaders() { const k = getKey(); return k ? { 'Authorization': 'Bearer ' + k } : {}; }
 function saveApiKey(v) { try { localStorage.setItem('sra_api_key', v); } catch {} }
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 function providerMode() { return document.getElementById('providerMode').value; }
 function applyProviderMode() {
   const gemini = providerMode() === 'gemini';
   document.getElementById('providerUrlGroup').style.display = gemini ? 'none' : '';
+  document.getElementById('modelGroup').style.display = gemini ? 'none' : '';
   document.querySelector('label[for="openaiKey"]').textContent = gemini ? 'Gemini API key' : 'Provider API key';
-  document.getElementById('openaiModel').placeholder = gemini ? 'gemini-3.1-flash-lite' : 'gpt-4o-mini';
-  const modelInput = document.getElementById('openaiModel');
-  if (gemini && (!modelInput.value.trim() || modelInput.value.startsWith('gpt-'))) modelInput.value = 'gemini-3.1-flash-lite';
 }
 function saveAIConfig() {
   try {
@@ -967,7 +966,7 @@ async function startTranscription() {
   fd.append('async', 'true');
   fd.append('engine', providerMode() === 'gemini' ? 'gemini' : 'whisper-bn');
   if (providerMode() === 'gemini') {
-    fd.append('model', document.getElementById('openaiModel').value.trim() || 'gemini-3.1-flash-lite');
+    fd.append('model', GEMINI_MODEL);
     fd.append('gemini_api_key', document.getElementById('openaiKey').value.trim());
   }
 
@@ -1101,7 +1100,7 @@ async function fetchResult(jobId, jobData) {
 }
 
 function hasAIConfig() {
-  const required = providerMode() === 'gemini' ? ['aiPrompt', 'openaiModel', 'openaiKey'] : ['aiPrompt', 'openaiUrl', 'openaiModel', 'openaiKey'];
+  const required = providerMode() === 'gemini' ? ['aiPrompt', 'openaiKey'] : ['aiPrompt', 'openaiUrl', 'openaiModel', 'openaiKey'];
   return required.every(id => document.getElementById(id).value.trim());
 }
 function meetingTurns() { return resultData?.turns || resultData?.segments || []; }
@@ -1214,8 +1213,8 @@ async function processWithAI() {
   const prompt = document.getElementById('aiPrompt').value.trim();
   const openaiKey = document.getElementById('openaiKey').value.trim();
   const baseUrl = document.getElementById('openaiUrl').value.trim();
-  const model = document.getElementById('openaiModel').value.trim();
   const provider = providerMode() === 'gemini' ? 'gemini' : 'openai';
+  const model = provider === 'gemini' ? GEMINI_MODEL : document.getElementById('openaiModel').value.trim();
   const transcript = mappedTranscript();
   if (!transcript || !prompt || !openaiKey || !model || (provider === 'openai' && !baseUrl)) {
     showError(provider === 'gemini' ? 'Add an AI prompt, Gemini model, and Gemini API key before processing.' : 'Add an AI prompt, API URL, model name, and API key before processing.');
