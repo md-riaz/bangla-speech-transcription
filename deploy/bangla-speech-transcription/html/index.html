@@ -732,20 +732,31 @@ let API = currentModel.api;
 function useMeetingNotesPrompt() {
   document.getElementById('aiPrompt').value = `নিচের বাংলা meeting transcript থেকে meeting notes তৈরি করো।
 
-সিদ্ধান্ত:
+Output rules:
+- Markdown ব্যবহার করবে না। কোনো heading marker যেমন ##, ###, **bold**, table, code block ব্যবহার করবে না।
+- Plain text লিখবে, শুধু new lines এবং simple ASCII/safe symbols ব্যবহার করবে: -, 1., :, →, ()
+- Business term, technical term, product name, role, process name, deadline, status word English-এ স্বাভাবিক হলে English রাখবে। যেমন: Customer Retention, Action items, Pending, Support, Pricing, Negotiation, After-sales service, Management, Product Manager, Portfolio, Report, Deadline, Follow-up, Zimbra, CMM.
+- English term জোর করে বাংলা বানাবে না যদি সেটা পড়তে অস্বাভাবিক লাগে।
+
+Format:
+Meeting Notes
+
+Decision:
 - ...
 
 Action items:
-1. দায়িত্বপ্রাপ্ত speaker/person → কাজ → deadline
+1. responsible person → task → deadline/status
 
 Pending:
 - ...
 
-নাম, সংখ্যা, তারিখ, deadline এবং দায়িত্ব transcript-এ না থাকলে অনুমান করবে না।
-Action items-এ দায়িত্বপ্রাপ্ত ব্যক্তির নাম অবশ্যই transcript-এর speaker label থেকে হুবহু নিতে হবে।
-যেমন transcript-এ [CEO] থাকলে CEO লিখবে, [Sakib] থাকলে Sakib লিখবে।
-Speaker label C, Speaker 1, Speaker 2 বা অন্য কোনো নতুন নাম বানাবে না।
-যদি দায়িত্বপ্রাপ্ত ব্যক্তি স্পষ্ট না হয়, লিখবে "উল্লেখ নেই"।`;
+Responsibility rules:
+- Action item-এর responsible person নির্ধারণ করবে কাজটি আসলে কাকে assign করা হয়েছে, কে কথাটি বলেছে তার ভিত্তিতে নয়।
+- যদি Speaker 1 কোনো task বলে এবং Speaker 2 acknowledge করে, তাহলে Speaker 2 responsible হতে পারে।
+- যদি কোনো speaker explicit person name বলে task assign করে, সেই person name ব্যবহার করবে।
+- যদি transcript-এ speaker label [CEO], [Sakib], [Speaker 1], [Speaker 2] থাকে, label হুবহু রাখবে; C, Speaker A, ব্যক্তি ১, নতুন নাম বা translated label বানাবে না।
+- যদি responsible person স্পষ্ট না হয়, লিখবে: উল্লেখ নেই
+- নাম, সংখ্যা, তারিখ, deadline এবং responsibility transcript-এ না থাকলে অনুমান করবে না।`;
   saveAIConfig();
 }
 
