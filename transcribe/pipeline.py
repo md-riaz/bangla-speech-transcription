@@ -88,14 +88,20 @@ class TranscriptionPipeline:
 
     # --- bookkeeping ---------------------------------------------------------
     def _load_processed(self) -> set:
-        if self.processed_log.exists():
+        if not self.processed_log.exists():
+            return set()
+        try:
             with open(self.processed_log) as f:
                 return set(json.load(f))
-        return set()
+        except json.JSONDecodeError:
+            log.warning("Ignoring corrupt processed log: %s", self.processed_log)
+            return set()
 
     def _save_processed(self) -> None:
-        with open(self.processed_log, "w") as f:
+        tmp = self.processed_log.with_suffix(".tmp")
+        with open(tmp, "w") as f:
             json.dump(list(self.processed), f)
+        os.replace(tmp, self.processed_log)
 
     @staticmethod
     def _call_id(filename) -> str:

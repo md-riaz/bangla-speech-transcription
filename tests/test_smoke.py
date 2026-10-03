@@ -80,6 +80,17 @@ def test_srt_timestamp():
     assert _srt_timestamp(3661.5) == "01:01:01,500"
 
 
+def test_pipeline_ignores_corrupt_processed_log(tmp_path):
+    from transcribe.pipeline import TranscriptionPipeline
+
+    log_path = tmp_path / "processed_files.json"
+    log_path.write_text('{"broken":', encoding="utf-8")
+    pipeline = object.__new__(TranscriptionPipeline)
+    pipeline.processed_log = log_path
+
+    assert pipeline._load_processed() == set()
+
+
 def test_merge_orders_by_start_and_labels():
     left = [{"start": 0.0, "end": 1.0, "text": "hi"}]
     right = [{"start": 0.5, "end": 1.5, "text": "yo"}]
