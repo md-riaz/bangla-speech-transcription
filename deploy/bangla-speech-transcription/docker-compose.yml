@@ -20,3 +20,9 @@ services:
       - "traefik.http.routers.bangla-speech-transcription.tls=true"
       - "traefik.http.routers.bangla-speech-transcription.tls.certresolver=letsencrypt"
       - "traefik.http.services.bangla-speech-transcription.loadbalancer.server.port=3800"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3800/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
