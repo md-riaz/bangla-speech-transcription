@@ -9,7 +9,8 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=false"
-    network_mode: host
+    networks:
+      - ai-network
     environment:
       PORT: "${PORT:-3433}"
       MODEL_PROVIDER: "${MODEL_PROVIDER:-whisper-bn}"
@@ -77,3 +78,7 @@ services:
 
 volumes:
   call-intelligence-models:
+
+networks:
+  ai-network:
+    external: true

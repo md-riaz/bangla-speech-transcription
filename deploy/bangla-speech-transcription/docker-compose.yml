@@ -3,7 +3,9 @@ services:
     image: nginx:alpine
     container_name: bangla-speech-transcription
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - traefik
+      - ai-network
     env_file:
       - .env
     volumes:
@@ -19,10 +21,17 @@ services:
       - "traefik.http.routers.bangla-speech-transcription.rule=Host(`bntranscription.ai-api.ancbd.com`)"
       - "traefik.http.routers.bangla-speech-transcription.tls=true"
       - "traefik.http.routers.bangla-speech-transcription.tls.certresolver=letsencrypt"
-      - "traefik.http.services.bangla-speech-transcription.loadbalancer.server.port=3800"
+      - "traefik.http.services.bangla-speech-transcription.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3800/health >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null"]
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
+
+networks:
+  traefik:
+    external: true
+  ai-network:
+    external: true
